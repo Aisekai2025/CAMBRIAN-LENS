@@ -32,11 +32,10 @@
         </div>
     </div>
 
-    <!-- ライブラリを直接読み込む方式に統一 -->
+    <!-- 修正：最も安定した配信元(esm.sh)に変更 -->
     <script type="module">
-        import * as THREE from 'https://cdn.skypack.dev';
+        import * as THREE from 'https://esm.sh';
 
-        // --- 基本設定 ---
         let evolution = 0;
         const scene = new THREE.Scene();
         scene.fog = new THREE.FogExp2(0x001015, 0.1);
@@ -48,7 +47,6 @@
         renderer.setPixelRatio(window.devicePixelRatio);
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-        // --- 琥珀マテリアル ---
         const amberMat = new THREE.ShaderMaterial({
             uniforms: { uTime: { value: 0 }, uEvo: { value: 0.0 }, uColor: { value: new THREE.Color(0xffaa22) } },
             vertexShader: `
@@ -72,7 +70,6 @@
             transparent: true, side: THREE.DoubleSide
         });
 
-        // --- アノマロカリス本体 ---
         const bodyGroup = new THREE.Group();
         const segments = [];
         for(let i=0; i<14; i++) {
@@ -84,81 +81,48 @@
         }
         scene.add(bodyGroup);
 
-        // --- 三葉虫 ---
         const trilobites = [];
         const triMat = new THREE.MeshPhongMaterial({ color: 0x443322 });
         for(let i=0; i<40; i++) {
             const tri = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 0), triMat);
             tri.position.set(Math.random()*10-5, -1.5, Math.random()*10-5);
-            tri.userData = { speed: 0.02 + Math.random()*0.02, alive: true, offset: Math.random()*10 };
+            tri.userData = { speed: 0.02 + Math.random()*0.02, alive: true };
             trilobites.push(tri);
             scene.add(tri);
         }
 
-        // --- ライバル: フルディア ---
-        const rivals = [];
-        const hurdiaMat = new THREE.MeshStandardMaterial({ color: 0x556644 });
-        for(let i=0; i<2; i++) {
-            const hurdia = new THREE.Group();
-            hurdia.add(new THREE.Mesh(new THREE.ConeGeometry(0.4, 1, 4), hurdiaMat));
-            hurdia.position.set(Math.random()*8-4, 0, -10);
-            rivals.push(hurdia);
-            scene.add(hurdia);
-        }
-
-        // --- ライト ---
         const light = new THREE.PointLight(0x00ffff, 100);
         light.position.set(0, 5, 0);
         scene.add(light);
         scene.add(new THREE.AmbientLight(0x001122, 2));
 
-        // --- 操作 & イベント ---
         let isStriking = false;
-        window.addEventListener('mousedown', () => isStriking = true);
-        window.addEventListener('touchstart', () => isStriking = true);
+        const doStrike = () => { isStriking = true; setTimeout(() => isStriking = false, 300); };
+        window.addEventListener('mousedown', doStrike);
+        window.addEventListener('touchstart', (e) => { e.preventDefault(); doStrike(); }, { passive: false });
 
-        function triggerTurbidity() {
-            document.getElementById('alert').style.display = 'block';
-            document.getElementById('dust-overlay').style.background = 'rgba(80, 50, 20, 0.9)';
-            setTimeout(() => {
-                evolution = Math.max(0, evolution - 0.2);
-                document.getElementById('alert').style.display = 'none';
-                document.getElementById('dust-overlay').style.background = 'rgba(80, 50, 20, 0)';
-            }, 4000);
-        }
-        setInterval(triggerTurbidity, 20000);
-
-        // --- メインループ ---
         function animate(time) {
             requestAnimationFrame(animate);
             const t = time * 0.001;
             amberMat.uniforms.uTime.value = t;
             amberMat.uniforms.uEvo.value = evolution;
 
-            // アノマロカリス
             segments.forEach((s, i) => {
-                s.rotation.x = Math.sin(t * 2 + i * 0.4) * 0.2 + (isStriking ? -1.0 : 0);
+                s.rotation.x = Math.sin(t * 2 + i * 0.4) * 0.2 + (isStriking ? -1.2 : 0);
                 s.scale.setScalar(1 + evolution * 0.5);
             });
-            if(isStriking) setTimeout(() => isStriking = false, 200);
 
-            // 三葉虫 & 捕食
             trilobites.forEach(tri => {
                 if(!tri.userData.alive) return;
                 tri.position.z += tri.userData.speed;
                 if(tri.position.z > 5) tri.position.z = -5;
-                if(isStriking && tri.position.distanceTo(bodyGroup.position) < 1.5) {
+                if(isStriking && tri.position.distanceTo(bodyGroup.position) < 1.8) {
                     tri.userData.alive = false; tri.visible = false;
                     evolution = Math.min(1.0, evolution + 0.05);
                     document.getElementById('evo-progress').style.width = (evolution * 100) + '%';
                     document.getElementById('evo-lv').innerText = 'Lv.' + Math.floor(evolution * 10 + 1);
                     document.getElementById('hardness').innerText = Math.floor(42 + evolution * 50) + '%';
                 }
-            });
-
-            // ライバルAI
-            rivals.forEach(rv => {
-                rv.position.z += 0.03; if(rv.position.z > 10) rv.position.z = -10;
             });
 
             camera.lookAt(bodyGroup.position);
