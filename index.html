@@ -32,9 +32,9 @@
         </div>
     </div>
 
-    <!-- 修正：最も安定した配信元(esm.sh)に変更 -->
+    <!-- 修正：URLの末尾まで正確に指定し、MIMEタイプエラーを回避 -->
     <script type="module">
-        import * as THREE from 'https://esm.sh';
+        import * as THREE from 'https://cdn.jsdelivr.net';
 
         let evolution = 0;
         const scene = new THREE.Scene();
@@ -99,7 +99,7 @@
         let isStriking = false;
         const doStrike = () => { isStriking = true; setTimeout(() => isStriking = false, 300); };
         window.addEventListener('mousedown', doStrike);
-        window.addEventListener('touchstart', (e) => { e.preventDefault(); doStrike(); }, { passive: false });
+        window.addEventListener('touchstart', (e) => { doStrike(); }, { passive: true });
 
         function animate(time) {
             requestAnimationFrame(animate);
