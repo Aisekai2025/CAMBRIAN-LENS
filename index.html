@@ -11,11 +11,11 @@
         .panel { position: absolute; background: rgba(0, 20, 40, 0.5); border-left: 3px solid #0ff; padding: 10px; backdrop-filter: blur(10px); transition: all 0.5s; }
         #header { top: 20px; left: 20px; font-size: 1.2rem; font-weight: 900; letter-spacing: 4px; }
         #evo-status { bottom: 20px; left: 20px; width: 220px; }
-        #alert { top: 50%; left: 50%; transform: translate(-50%, -50%); border: 2px solid #f00; color: #f00; display: none; padding: 20px; background: rgba(50, 0, 0, 0.8); animation: blink 0.5s infinite; }
+        #alert { top: 50%; left: 50%; transform: translate(-50%, -50%); border: 2px solid #f00; color: #f00; display: none; padding: 20px; background: rgba(50, 0, 0, 0.8); animation: blink 0.5s infinite; z-index: 100; }
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
         .progress-bar { width: 100%; height: 4px; background: #033; margin-top: 5px; }
         #evo-progress { height: 100%; width: 0%; background: #0ff; box-shadow: 0 0 10px #0ff; }
-        #dust-overlay { position: absolute; inset: 0; background: rgba(80, 50, 20, 0); pointer-events: none; transition: background 2s; }
+        #dust-overlay { position: absolute; inset: 0; background: rgba(80, 50, 20, 0); pointer-events: none; transition: background 2s; z-index: 50; }
     </style>
 </head>
 <body>
@@ -32,12 +32,11 @@
         </div>
     </div>
 
+    <!-- ライブラリを直接読み込む方式に統一 -->
     <script type="module">
-    // ここを書き換え！
-    import * as THREE from 'https://cdn.skypack.dev';
-    // あとはそのまま
+        import * as THREE from 'https://cdn.skypack.dev';
 
-        // --- 設定 ---
+        // --- 基本設定 ---
         let evolution = 0;
         const scene = new THREE.Scene();
         scene.fog = new THREE.FogExp2(0x001015, 0.1);
@@ -49,16 +48,11 @@
         renderer.setPixelRatio(window.devicePixelRatio);
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-        // --- 琥珀アーム・シェーダー ---
+        // --- 琥珀マテリアル ---
         const amberMat = new THREE.ShaderMaterial({
-            uniforms: {
-                uTime: { value: 0 },
-                uEvo: { value: 0.0 }, // 進化度 (0.0 ~ 1.0)
-                uColor: { value: new THREE.Color(0xffaa22) }
-            },
+            uniforms: { uTime: { value: 0 }, uEvo: { value: 0.0 }, uColor: { value: new THREE.Color(0xffaa22) } },
             vertexShader: `
-                varying vec3 vNormal;
-                varying vec3 vViewDir;
+                varying vec3 vNormal; varying vec3 vViewDir;
                 void main() {
                     vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
                     vNormal = normalize(normalMatrix * normal);
@@ -67,14 +61,10 @@
                 }
             `,
             fragmentShader: `
-                uniform float uTime;
-                uniform float uEvo;
-                uniform vec3 uColor;
-                varying vec3 vNormal;
-                varying vec3 vViewDir;
+                uniform float uTime; uniform float uEvo; uniform vec3 uColor;
+                varying vec3 vNormal; varying vec3 vViewDir;
                 void main() {
                     float fresnel = pow(1.0 - dot(vNormal, vViewDir), 2.0);
-                    // 進化するにつれ光沢(Metalness的)と透明度が変化
                     vec3 finalColor = mix(uColor, vec3(1.0, 0.9, 0.5), uEvo);
                     gl_FragColor = vec4(finalColor + fresnel * (0.3 + uEvo * 0.5), 0.5 + uEvo * 0.3 + fresnel * 0.5);
                 }
@@ -82,161 +72,105 @@
             transparent: true, side: THREE.DoubleSide
         });
 
-        // --- アノマロカリス全身構築 ---
+        // --- アノマロカリス本体 ---
         const bodyGroup = new THREE.Group();
         const segments = [];
         for(let i=0; i<14; i++) {
             const size = (1 - i/14) * 0.8;
-            const geo = new THREE.BoxGeometry(size, 0.2, 0.4);
-            const seg = new THREE.Mesh(geo, amberMat);
+            const seg = new THREE.Mesh(new THREE.BoxGeometry(size, 0.2, 0.4), amberMat);
             seg.position.z = -i * 0.35;
             segments.push(seg);
             bodyGroup.add(seg);
         }
         scene.add(bodyGroup);
 
-        // --- 三葉虫 AI群れ ---
+        // --- 三葉虫 ---
         const trilobites = [];
-        const triGeo = new THREE.IcosahedronGeometry(0.1, 0);
         const triMat = new THREE.MeshPhongMaterial({ color: 0x443322 });
         for(let i=0; i<40; i++) {
-            const tri = new THREE.Mesh(triGeo, triMat);
+            const tri = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 0), triMat);
             tri.position.set(Math.random()*10-5, -1.5, Math.random()*10-5);
-            tri.userData = { speed: 0.02 + Math.random()*0.02, alive: true };
+            tri.userData = { speed: 0.02 + Math.random()*0.02, alive: true, offset: Math.random()*10 };
             trilobites.push(tri);
             scene.add(tri);
         }
 
-        // --- 環境音風ノイズ & ライト ---
+        // --- ライバル: フルディア ---
+        const rivals = [];
+        const hurdiaMat = new THREE.MeshStandardMaterial({ color: 0x556644 });
+        for(let i=0; i<2; i++) {
+            const hurdia = new THREE.Group();
+            hurdia.add(new THREE.Mesh(new THREE.ConeGeometry(0.4, 1, 4), hurdiaMat));
+            hurdia.position.set(Math.random()*8-4, 0, -10);
+            rivals.push(hurdia);
+            scene.add(hurdia);
+        }
+
+        // --- ライト ---
         const light = new THREE.PointLight(0x00ffff, 100);
         light.position.set(0, 5, 0);
         scene.add(light);
         scene.add(new THREE.AmbientLight(0x001122, 2));
 
-        // --- インタラクション ---
+        // --- 操作 & イベント ---
         let isStriking = false;
-        window.addEventListener('touchstart', () => isStriking = true);
         window.addEventListener('mousedown', () => isStriking = true);
+        window.addEventListener('touchstart', () => isStriking = true);
 
-        // --- 乱泥流イベント ---
         function triggerTurbidity() {
             document.getElementById('alert').style.display = 'block';
             document.getElementById('dust-overlay').style.background = 'rgba(80, 50, 20, 0.9)';
             setTimeout(() => {
-                // リセット（回帰）
-                evolution = Math.max(0, evolution - 0.2); 
+                evolution = Math.max(0, evolution - 0.2);
                 document.getElementById('alert').style.display = 'none';
                 document.getElementById('dust-overlay').style.background = 'rgba(80, 50, 20, 0)';
             }, 4000);
         }
-        setInterval(triggerTurbidity, 20000); // 20秒周期
+        setInterval(triggerTurbidity, 20000);
 
-        // --- ループ ---
+        // --- メインループ ---
         function animate(time) {
             requestAnimationFrame(animate);
             const t = time * 0.001;
             amberMat.uniforms.uTime.value = t;
             amberMat.uniforms.uEvo.value = evolution;
 
-            // アノマロカリスの動き
-            bodyGroup.position.y = Math.sin(t) * 0.2;
+            // アノマロカリス
             segments.forEach((s, i) => {
-                const wave = Math.sin(t * 2 + i * 0.4) * 0.2;
-                s.rotation.x = wave + (isStriking ? -1.0 : 0);
-                s.scale.setScalar(1 + evolution * 0.5); // 進化で巨大化
+                s.rotation.x = Math.sin(t * 2 + i * 0.4) * 0.2 + (isStriking ? -1.0 : 0);
+                s.scale.setScalar(1 + evolution * 0.5);
             });
+            if(isStriking) setTimeout(() => isStriking = false, 200);
 
-            if(isStriking) setTimeout(() => isStriking = false, 500);
-
-            // 三葉虫の挙動 & 捕食判定
+            // 三葉虫 & 捕食
             trilobites.forEach(tri => {
                 if(!tri.userData.alive) return;
                 tri.position.z += tri.userData.speed;
                 if(tri.position.z > 5) tri.position.z = -5;
-
-                const dist = tri.position.distanceTo(bodyGroup.position);
-                if(isStriking && dist < 1.5) {
-                    tri.userData.alive = false;
-                    tri.visible = false;
-                    evolution = Math.min(1.0, evolution + 0.05); // 捕食で進化
-                    // UI更新
+                if(isStriking && tri.position.distanceTo(bodyGroup.position) < 1.5) {
+                    tri.userData.alive = false; tri.visible = false;
+                    evolution = Math.min(1.0, evolution + 0.05);
                     document.getElementById('evo-progress').style.width = (evolution * 100) + '%';
                     document.getElementById('evo-lv').innerText = 'Lv.' + Math.floor(evolution * 10 + 1);
                     document.getElementById('hardness').innerText = Math.floor(42 + evolution * 50) + '%';
                 }
             });
 
+            // ライバルAI
+            rivals.forEach(rv => {
+                rv.position.z += 0.03; if(rv.position.z > 10) rv.position.z = -10;
+            });
+
             camera.lookAt(bodyGroup.position);
             renderer.render(scene, camera);
         }
-        animate();
-        // --- ライバル: フルディア (Hurdia) ---
-    const rivals = [];
-    const hurdiaMat = new THREE.MeshStandardMaterial({ color: 0x556644, roughness: 0.9, metalness: 0.2 });
-    for(let i=0; i<2; i++) {
-        const hurdia = new THREE.Group();
-        const head = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.2, 4), hurdiaMat);
-        head.rotation.x = Math.PI / 2;
-        hurdia.add(head);
-        hurdia.position.set(Math.random()*8-4, 0, -10);
-        hurdia.userData = { target: null, state: 'hunt' };
-        rivals.push(hurdia);
-        scene.add(hurdia);
-    }
+        animate(0);
 
-    // --- 掃除屋: オパビニア (Opabinia) ---
-    const opabinias = [];
-    const opaMat = new THREE.MeshStandardMaterial({ color: 0x774466, transparent: true, opacity: 0.8 });
-    for(let i=0; i<5; i++) {
-        const opa = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), opaMat);
-        const proboscis = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.4), opaMat);
-        proboscis.position.z = 0.25; proboscis.rotation.x = Math.PI/2;
-        opa.add(proboscis);
-        opa.position.set(Math.random()*6-3, -1.8, Math.random()*6-3);
-        opabinias.push(opa);
-        scene.add(opa);
-    }
-
-    // --- 拡張アニメーションループ (生存競争ロジック) ---
-    function updateEcology(t) {
-        // フルディアの横取りAI
-        rivals.forEach(rv => {
-            // 最も近い「生きた三葉虫」をサーチ
-            let closest = null; let minDist = 10;
-            trilobites.forEach(tri => {
-                if(!tri.userData.alive) return;
-                const d = tri.position.distanceTo(rv.position);
-                if(d < minDist) { minDist = d; closest = tri; }
-            });
-
-            if(closest) {
-                // 獲物へ向かって突進
-                rv.lookAt(closest.position);
-                rv.position.lerp(closest.position, 0.015);
-                // 捕食判定
-                if(minDist < 0.5) {
-                    closest.userData.alive = false; closest.visible = false;
-                    console.log("Rival captured prey!");
-                }
-            } else {
-                rv.position.z += 0.02; if(rv.position.z > 10) rv.position.z = -10;
-            }
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
         });
-
-        // オパビニアの掃除行動
-        opabinias.forEach(opa => {
-            opa.position.x += Math.sin(t * 0.5 + opa.position.z) * 0.005;
-            opa.rotation.y += 0.01;
-            // 倒された三葉虫の近くへ寄る
-            trilobites.forEach(tri => {
-                if(!tri.userData.alive && tri.position.distanceTo(opa.position) < 2) {
-                    opa.position.lerp(tri.position, 0.01);
-                }
-            });
-        });
-    }
-
-    // 既存の animate() 内で updateEcology(t) を呼び出すように修正
     </script>
 </body>
 </html>
