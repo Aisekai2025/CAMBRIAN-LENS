@@ -7,260 +7,154 @@
     <style>
         :root { --neon-blue: #0ff; --neon-alert: #f90; }
         body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Courier New', monospace; touch-action: none; user-select: none; }
-        #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
+        canvas { display: block; width: 100vw; height: 100vh; }
         /* BURGESS-OS UI */
-        #ui-layer { position: absolute; inset: 0; z-index: 10; pointer-events: none; background: linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px); background-size: 40px 40px; }
+        #ui-layer { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px); background-size: 40px 40px; }
         .os-header { position: absolute; top: 15px; left: 15px; color: var(--neon-blue); text-shadow: 0 0 5px var(--neon-blue); font-size: 14px; border-left: 2px solid var(--neon-blue); padding-left: 10px; }
         .os-stats { position: absolute; bottom: 15px; left: 15px; color: var(--neon-blue); font-size: 12px; }
         .scan-line { position: absolute; width: 100%; height: 2px; background: rgba(0, 255, 255, 0.1); animation: scan 4s linear infinite; }
         @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
-        #turbidity-overlay { position: absolute; inset: 0; background: #3b2a1a; opacity: 0; z-index: 20; pointer-events: none; transition: opacity 2s; }
-        /* Info Modal */
-        #info-panel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; background: rgba(0, 20, 30, 0.9); border: 1px solid var(--neon-blue); color: #fff; padding: 20px; z-index: 30; display: none; pointer-events: auto; border-radius: 5px; backdrop-filter: blur(10px); }
-        #info-panel h2 { margin: 0; color: var(--neon-blue); font-size: 18px; }
-        .close-btn { display: inline-block; margin-top: 15px; padding: 5px 10px; border: 1px solid var(--neon-blue); color: var(--neon-blue); cursor: pointer; font-size: 12px; }
+        #turbidity-overlay { position: absolute; inset: 0; background: #3b2a1a; opacity: 0; pointer-events: none; transition: opacity 2s; z-index: 20; }
+        #info-panel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 280px; background: rgba(0, 20, 30, 0.9); border: 1px solid var(--neon-blue); color: #fff; padding: 20px; display: none; pointer-events: auto; backdrop-filter: blur(10px); }
+        .close-btn { display: inline-block; margin-top: 15px; padding: 5px 10px; border: 1px solid var(--neon-blue); color: var(--neon-blue); cursor: pointer; }
     </style>
 </head>
 <body>
-    <div id="canvas-container"></div>
+    <div id="turbidity-overlay"></div>
+    <canvas id="renderCanvas"></canvas>
     <div id="ui-layer">
         <div class="scan-line"></div>
-        <div class="os-header">BURGESS-OS v0.508G<br><span style="font-size: 10px; color: #aaa;">SYS.STATUS: ONLINE // BIOME: MIDDLE CAMBRIAN</span></div>
-        <div class="os-stats" id="stats">EVOLUTION LEVEL: 1.00<br>TARGETS: SCANNING...</div>
+        <div class="os-header">BURGESS-OS v0.508G<br><span style="font-size: 10px; color: #aaa;">SYS.STATUS: ONLINE // BIOME: PURE ENGINE</span></div>
+        <div class="os-stats">EVOLUTION: <span id="evo-lv">1.00</span><br>PREDATION SUCCESS: <span id="count">0</span></div>
     </div>
-    <div id="turbidity-overlay"></div>
     <div id="info-panel">
-        <h2 id="info-title">Species Name</h2>
+        <h2 id="info-title">Species</h2>
         <p id="info-desc"></p>
-        <div class="close-btn" onclick="resumeTime()">RESUME SIMULATION</div>
+        <div class="close-btn" onclick="document.getElementById('info-panel').style.display='none'">RESUME</div>
     </div>
 
-    <script type="importmap">
-    { "imports": { "three": "https://unpkg.com", "three/addons/": "https://unpkg.com" } }
-    </script>
-    <script type="module">
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    <script>
+        /**
+         * CAMBRIAN-LENS: PURE VANILLA ENGINE
+         * 外部ライブラリを一切使わず、自作の3Dプロジェクションで描画する究極版
+         */
+        const canvas = document.getElementById('renderCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height, evolution = 1.0, killCount = 0;
+        let time = 0, isStriking = false;
 
-        let scene, camera, renderer, controls, clock = new THREE.Clock();
-        let timeScale = 1.0, globalTime = 0, evolutionLevel = 1.0;
-        const entities = [];
+        // 3Dを2Dに変換する魔法（プロジェクション）
+        function project(x, y, z) {
+            const focalLength = 400;
+            const scale = focalLength / (focalLength + z + 200);
+            return {
+                x: width / 2 + x * scale,
+                y: height / 2 + y * scale,
+                scale: scale
+            };
+        }
 
-        // 1. Amber Translucent Shader (アームと体節用)
-        const amberShader = {
-            uniforms: {
-                time: { value: 0 }, evolution: { value: 1.0 },
-                baseColor: { value: new THREE.Color(0x994411) },
-                rimColor: { value: new THREE.Color(0xffaa22) }
-            },
-            vertexShader: `
-                varying vec3 vNormal; varying vec3 vViewPos; varying vec2 vUv;
-                void main() {
-                    vNormal = normalize(normalMatrix * normal);
-                    vUv = uv;
-                    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-                    vViewPos = -mvPosition.xyz;
-                    gl_Position = projectionMatrix * mvPosition;
-                }
-            `,
-            fragmentShader: `
-                uniform float time; uniform float evolution;
-                uniform vec3 baseColor; uniform vec3 rimColor;
-                varying vec3 vNormal; varying vec3 vViewPos; varying vec2 vUv;
-                void main() {
-                    vec3 normal = normalize(vNormal);
-                    vec3 viewDir = normalize(vViewPos);
-                    float fresnel = pow(1.0 - clamp(dot(viewDir, normal), 0.0, 1.0), 2.5);
-                    float dots = sin(vUv.x * 40.0 + time) * sin(vUv.y * 40.0);
-                    vec3 color = mix(baseColor, vec3(0.4, 0.1, 0.0), step(0.95, dots) * 0.4);
-                    gl_FragColor = vec4(color + (rimColor * fresnel * evolution), 0.75 + fresnel * 0.25);
-                }
-            `,
-            transparent: true, side: THREE.DoubleSide
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // 獲物（三葉虫）のデータ
+        const trilobites = Array.from({length: 15}, () => ({
+            x: Math.random() * 600 - 300,
+            y: 150,
+            z: Math.random() * 800 - 400,
+            speed: 1 + Math.random() * 2,
+            alive: true
+        }));
+
+        // 操作
+        const strike = () => {
+            isStriking = true;
+            setTimeout(() => isStriking = false, 300);
         };
+        window.addEventListener('mousedown', strike);
+        window.addEventListener('touchstart', (e) => { e.preventDefault(); strike(); }, {passive: false});
 
-        class Anomalocaris {
-            constructor() {
-                this.type = 'Anomalocaris';
-                this.mesh = new THREE.Group();
-                this.isAttacking = false;
-                this.attackProgress = 0;
-                const mat = new THREE.ShaderMaterial(amberShader);
-                this.uniforms = mat.uniforms;
+        function draw() {
+            time += 0.03;
+            ctx.fillStyle = '#000811';
+            ctx.fillRect(0, 0, width, height);
 
-                // 胴体：10節の流線型セグメント
-                this.segments = [];
-                for(let i=0; i<10; i++) {
-                    const radius = i < 3 ? 1.2 - i*0.1 : 0.9 - (i-3)*0.1;
-                    const geo = new THREE.BoxGeometry(radius*1.5, radius, 0.8);
-                    const seg = new THREE.Mesh(geo, mat);
-                    seg.position.z = -i * 0.7;
-                    this.segments.push(seg);
-                    this.mesh.add(seg);
-                }
-
-                // 14対の精密な側鰭
-                this.flaps = [];
-                const flapGeo = new THREE.PlaneGeometry(3.5, 1.2);
-                flapGeo.translate(1.75, 0, 0);
-                for(let i=0; i<14; i++) {
-                    const fR = new THREE.Mesh(flapGeo, mat);
-                    fR.position.set(0.6, -0.2, -i * 0.5);
-                    const fL = new THREE.Mesh(flapGeo, mat);
-                    fL.position.set(-0.6, -0.2, -i * 0.5);
-                    fL.rotation.y = Math.PI;
-                    this.flaps.push({r: fR, l: fL, idx: i});
-                    this.mesh.add(fR, fL);
-                }
-
-                // 琥珀のアーム (14節の多関節構造)
-                this.arms = [];
-                for(let side=-1; side<=1; side+=2) {
-                    const armRoot = new THREE.Group();
-                    let prevJoint = armRoot;
-                    const armSegments = [];
-                    for(let j=0; j<12; j++) {
-                        const sSize = (1 - j/12) * 0.4;
-                        const sGeo = new THREE.CylinderGeometry(sSize*0.8, sSize, 0.4);
-                        sGeo.rotateX(Math.PI/2);
-                        const sMesh = new THREE.Mesh(sGeo, mat);
-                        sMesh.position.z = 0.35;
-                        prevJoint.add(sMesh);
-                        armSegments.push(sMesh);
-                        prevJoint = sMesh;
-                    }
-                    armRoot.position.set(side*0.5, -0.2, 0.5);
-                    this.mesh.add(armRoot);
-                    this.arms.push({root: armRoot, segs: armSegments, side});
-                }
-                scene.add(this.mesh);
+            // 背景のマリンスノー
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.1)';
+            for(let i=0; i<30; i++) {
+                const px = (Math.sin(time * 0.2 + i) * 0.5 + 0.5) * width;
+                const py = (i * 100 + time * 50) % height;
+                ctx.fillRect(px, py, 2, 2);
             }
 
-            update(t, delta) {
-                this.uniforms.time.value = t;
-                this.uniforms.evolution.value = evolutionLevel;
-                this.mesh.translateZ(0.12 * evolutionLevel * timeScale);
-                this.mesh.rotation.y += Math.sin(t * 0.4) * 0.005;
+            // 三葉虫の描画と判定
+            trilobites.forEach(t => {
+                if(!t.alive) return;
+                t.z -= t.speed;
+                if(t.z < -400) t.z = 400;
 
-                // メタクロナール波
-                this.flaps.forEach(f => {
-                    const angle = Math.sin(t * 7.0 - f.idx * 0.5) * 0.5;
-                    f.r.rotation.z = angle; f.l.rotation.z = -angle;
-                });
+                const p = project(t.x, t.y, t.z);
+                ctx.fillStyle = `rgba(100, 100, 100, ${p.scale})`;
+                ctx.beginPath();
+                ctx.ellipse(p.x, p.y, 15 * p.scale, 10 * p.scale, 0, 0, Math.PI*2);
+                ctx.fill();
 
-                // アームの「巻き」と攻撃アニメーション
-                this.arms.forEach(arm => {
-                    const baseCurl = Math.sin(t * 2) * 0.1 + 0.2;
-                    const attackCurl = this.isAttacking ? Math.sin(this.attackProgress * 5) * 1.5 : 0;
-                    arm.segs.forEach(s => s.rotation.x = baseCurl - attackCurl);
-                });
-
-                if(this.isAttacking) {
-                    this.attackProgress += delta;
-                    if(this.attackProgress > 1.2) { this.isAttacking = false; this.attackProgress = 0; growEvolve(); }
+                // 捕食判定
+                if(isStriking && Math.abs(p.x - width/2) < 50 && Math.abs(p.y - height/2) < 50) {
+                    t.alive = false;
+                    killCount++;
+                    evolution += 0.05;
+                    document.getElementById('evo-lv').innerText = evolution.toFixed(2);
+                    document.getElementById('count').innerText = killCount;
+                    setTimeout(() => { t.alive = true; t.z = 400; }, 2000);
                 }
-                
-                // 獲物への追跡
-                if(!this.isAttacking) {
-                    let target = entities.find(e => e.type === 'Trilobite' && e.mesh.position.distanceTo(this.mesh.position) < 15);
-                    if(target) {
-                        this.mesh.lookAt(target.mesh.position);
-                        if(this.mesh.position.distanceTo(target.mesh.position) < 4) { this.isAttacking = true; target.respawn(); }
-                    }
-                }
-            }
-        }
-
-        class Prey {
-            constructor(type, color, size) {
-                this.type = type;
-                this.mesh = new THREE.Mesh(new THREE.CapsuleGeometry(size, size*1.5, 4, 8), new THREE.MeshLambertMaterial({color}));
-                this.mesh.rotateX(Math.PI/2);
-                this.respawn();
-                scene.add(this.mesh);
-            }
-            respawn() { this.mesh.position.set((Math.random()-0.5)*50, -9.5, (Math.random()-0.5)*50); }
-            update(t) { this.mesh.position.z += 0.03 * timeScale; if(this.mesh.position.z > 30) this.respawn(); }
-        }
-
-        class Trilobite extends Prey { constructor() { super('Trilobite', 0x445544, 0.4); } }
-
-        function init() {
-            const container = document.getElementById('canvas-container');
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setClearColor(0x000811);
-            container.appendChild(renderer.domElement);
-
-            scene = new THREE.Scene();
-            scene.fog = new THREE.FogExp2(0x000811, 0.02);
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
-            camera.position.set(0, 15, 35);
-            controls = new OrbitControls(camera, renderer.domElement);
-
-            scene.add(new THREE.AmbientLight(0x003355, 1.5));
-            const sun = new THREE.DirectionalLight(0x4488ff, 2);
-            sun.position.set(10, 50, 20);
-            scene.add(sun);
-
-            // 床
-            const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({color: 0x051015}));
-            floor.rotation.x = -Math.PI/2; floor.position.y = -10;
-            scene.add(floor);
-
-            entities.push(new Anomalocaris());
-            for(let i=0; i<15; i++) entities.push(new Trilobite());
-
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
             });
-            renderer.domElement.addEventListener('pointerdown', onPointerDown);
-            animate();
-        }
 
-        function onPointerDown(e) {
-            const mouse = new THREE.Vector2((e.clientX/window.innerWidth)*2-1, -(e.clientY/window.innerHeight)*2+1);
-            const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(entities.map(e => e.mesh), true);
-            if(intersects.length > 0) {
-                const type = intersects[0].object.parent.parent?.type || 'Anomalocaris';
-                showInfo(type);
-                if(type === 'Anomalocaris') entities[0].isAttacking = true;
+            // アノマロカリスの本体（14節の琥珀色セグメント）
+            for(let i=14; i>=0; i--) {
+                const sz = i * 30 - 100;
+                const wave = Math.sin(time * 3 - i * 0.5) * 20;
+                const strikeAmt = isStriking ? Math.sin(time * 10) * 50 : 0;
+                
+                const p = project(Math.sin(time) * 20, wave + strikeAmt, sz);
+                const baseSize = (1 - i/14) * 80 * evolution * p.scale;
+
+                // 琥珀色のグラデーション（内蔵シェーダー）
+                const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, baseSize);
+                const alpha = (0.5 + (1 - i/14) * 0.4) * p.scale;
+                grad.addColorStop(0, `rgba(255, 180, 50, ${alpha})`); // 琥珀
+                grad.addColorStop(1, `rgba(150, 70, 0, ${alpha * 0.2})`); // 縁
+
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.ellipse(p.x, p.y, baseSize, baseSize * 0.5, Math.sin(time + i*0.1)*0.2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 目（複眼）
+                if(i === 0) {
+                    ctx.fillStyle = '#0ff';
+                    ctx.beginPath();
+                    ctx.arc(p.x - 30 * p.scale, p.y - 20 * p.scale, 5 * p.scale, 0, Math.PI*2);
+                    ctx.arc(p.x + 30 * p.scale, p.y - 20 * p.scale, 5 * p.scale, 0, Math.PI*2);
+                    ctx.fill();
+                }
             }
+
+            requestAnimationFrame(draw);
         }
 
-        function showInfo(type) {
-            timeScale = 0.2;
-            document.getElementById('info-panel').style.display = 'block';
-            document.getElementById('info-title').innerText = type;
-            const db = { 'Anomalocaris': '【アノマロカリス】琥珀色の半透明な甲殻を持つ頂点捕食者。14対のヒレによるメタクロナール波で優雅に泳ぐ。', 'Trilobite': '【三葉虫】海底を這う節足動物。危険を察知すると砂に潜る挙動を見せる。' };
-            document.getElementById('info-desc').innerText = db[type] || '';
-        }
+        // 乱泥流イベント
+        setInterval(() => {
+            const ov = document.getElementById('turbidity-overlay');
+            ov.style.opacity = 0.8;
+            setTimeout(() => ov.style.opacity = 0, 3000);
+        }, 20000);
 
-        window.resumeTime = () => { timeScale = 1.0; document.getElementById('info-panel').style.display = 'none'; };
-
-        function growEvolve() {
-            evolutionLevel += 0.05;
-            document.getElementById('stats').innerHTML = `EVOLUTION LEVEL: ${evolutionLevel.toFixed(2)}<br>TARGETS: PREDATION SUCCESS`;
-        }
-
-        function animate() {
-            requestAnimationFrame(animate);
-            const delta = clock.getDelta();
-            globalTime += delta * timeScale;
-            entities.forEach(e => e.update(globalTime, delta));
-            // 乱泥流サイクル
-            if(Math.floor(globalTime) % 60 === 59) {
-                document.getElementById('turbidity-overlay').style.opacity = 1;
-                setTimeout(() => document.getElementById('turbidity-overlay').style.opacity = 0, 3000);
-            }
-            controls.update();
-            renderer.render(scene, camera);
-        }
-
-        init();
+        draw();
     </script>
 </body>
 </html>
