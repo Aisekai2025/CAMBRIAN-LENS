@@ -32,9 +32,11 @@
         </div>
     </div>
 
-    <script type="importmap">
-        { "imports": { "three": "https://unpkg.com" } }
-    </script>
+    <script type="module">
+    // ここを書き換え！
+    import * as THREE from 'https://cdn.skypack.dev';
+    // あとはそのまま
+
 
     <script type="module">
         import * as THREE from 'three';
