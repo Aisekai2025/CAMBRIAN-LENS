@@ -1,658 +1,645 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>CAMBRIAN-LENS | BURGESS-OS 0.508G</title>
-    <style>
-        :root {
-            --neon-blue: #0ff;
-            --neon-alert: #f90;
-        }
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #000;
-            font-family: 'Courier New', Courier, monospace;
-            touch-action: none;
-            user-select: none;
-        }
-        #canvas-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: 1;
-        }
-        /* BURGESS-OS UI */
-        #ui-layer {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 10;
-            pointer-events: none;
-            background: 
-                linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
-            background-size: 40px 40px;
-        }
-        .os-header {
-            position: absolute; top: 15px; left: 15px;
-            color: var(--neon-blue);
-            text-shadow: 0 0 5px var(--neon-blue);
-            font-size: 14px;
-            border-left: 2px solid var(--neon-blue);
-            padding-left: 10px;
-        }
-        .os-stats {
-            position: absolute; bottom: 15px; left: 15px;
-            color: var(--neon-blue);
-            font-size: 12px;
-        }
-        .scan-line {
-            position: absolute; width: 100%; height: 2px;
-            background: rgba(0, 255, 255, 0.2);
-            animation: scan 4s linear infinite;
-        }
-        @keyframes scan {
-            0% { top: 0; }
-            100% { top: 100%; }
-        }
-        /* Turbidity Current (乱泥流) Overlay */
-        #turbidity-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #3b2a1a;
-            opacity: 0;
-            z-index: 20;
-            pointer-events: none;
-            transition: opacity 2s ease-in-out;
-        }
-        /* Info Modal */
-        #info-panel {
-            position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            width: 300px;
-            background: rgba(0, 20, 30, 0.85);
-            border: 1px solid var(--neon-blue);
-            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
-            color: #fff;
-            padding: 20px;
-            z-index: 30;
-            display: none;
-            pointer-events: auto;
-            border-radius: 5px;
-        }
-        #info-panel h2 { margin: 0 0 10px; color: var(--neon-blue); font-size: 18px; }
-        #info-panel p { font-size: 13px; line-height: 1.4; color: #ccc; }
-        .close-btn {
-            display: inline-block; margin-top: 15px; padding: 5px 10px;
-            border: 1px solid var(--neon-blue); color: var(--neon-blue);
-            cursor: pointer; font-size: 12px; text-transform: uppercase;
-        }
-        .close-btn:hover { background: var(--neon-blue); color: #000; }
-        
-        #target-reticle {
-            position: absolute; top: 50%; left: 50%;
-            width: 40px; height: 40px;
-            transform: translate(-50%, -50%);
-            border: 1px solid rgba(0,255,255,0.4);
-            border-radius: 50%;
-            pointer-events: none;
-        }
-        #target-reticle::after {
-            content: ''; position: absolute; top: 18px; left: 18px;
-            width: 4px; height: 4px; background: var(--neon-blue); border-radius: 50%;
-        }
-    </style>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>CAMBRIAN-LENS | BURGESS-OS 0.508G</title>
+<style>
+  :root {
+    --neon-blue: #0ff;
+    --neon-alert: #f90;
+  }
+  body {
+    margin: 0;
+    overflow: hidden;
+    background-color: #000;
+    font-family: 'Courier New', Courier, monospace;
+    touch-action: none;
+    user-select: none;
+  }
+  #canvas-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1;
+  }
+  /* BURGESS-OS UI */
+  #ui-layer {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 10;
+    pointer-events: none;
+    background:
+      linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  .os-header {
+    position: absolute; top: 15px; left: 15px;
+    color: var(--neon-blue);
+    text-shadow: 0 0 5px var(--neon-blue);
+    font-size: 14px;
+    border-left: 2px solid var(--neon-blue);
+    padding-left: 10px;
+  }
+  .os-stats {
+    position: absolute; bottom: 15px; left: 15px;
+    color: var(--neon-blue);
+    font-size: 12px;
+  }
+  .scan-line {
+    position: absolute; width: 100%; height: 2px;
+    background: rgba(0, 255, 255, 0.2);
+    animation: scan 4s linear infinite;
+  }
+  @keyframes scan {
+    0% { top: 0; }
+    100% { top: 100%; }
+  }
+  /* Turbidity Current (乱泥流) Overlay */
+  #turbidity-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: #3b2a1a;
+    opacity: 0;
+    z-index: 20;
+    pointer-events: none;
+    transition: opacity 2s ease-in-out;
+  }
+  /* Info Modal */
+  #info-panel {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 300px;
+    background: rgba(0, 20, 30, 0.85);
+    border: 1px solid var(--neon-blue);
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+    color: #fff;
+    padding: 20px;
+    z-index: 30;
+    display: none;
+    pointer-events: auto;
+    border-radius: 5px;
+  }
+  #info-panel h2 { margin: 0 0 10px; color: var(--neon-blue); font-size: 18px; }
+  #info-panel p { font-size: 13px; line-height: 1.4; color: #ccc; }
+  .close-btn {
+    display: inline-block; margin-top: 15px; padding: 5px 10px;
+    border: 1px solid var(--neon-blue); color: var(--neon-blue);
+    cursor: pointer; font-size: 12px; text-transform: uppercase;
+  }
+  .close-btn:hover { background: var(--neon-blue); color: #000; }
+  #target-reticle {
+    position: absolute; top: 50%; left: 50%;
+    width: 40px; height: 40px;
+    transform: translate(-50%, -50%);
+    border: 1px solid rgba(0,255,255,0.4);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  #target-reticle::after {
+    content: ''; position: absolute; top: 18px; left: 18px;
+    width: 4px; height: 4px; background: var(--neon-blue); border-radius: 50%;
+  }
+</style>
+<script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+</script>
 </head>
 <body>
-    <div id="canvas-container"></div>
-    <div id="ui-layer">
-        <div class="scan-line"></div>
-        <div class="os-header">
-            BURGESS-OS v0.508G<br>
-            <span style="font-size: 10px; color: #aaa;">SYS.STATUS: ONLINE // BIOME: MIDDLE CAMBRIAN</span>
-        </div>
-        <div class="os-stats" id="stats">
-            EVOLUTION LEVEL: 1.00<br>
-            TARGETS: SCANNING...
-        </div>
-        <div id="target-reticle"></div>
+  <div id="canvas-container"></div>
+  <div id="ui-layer">
+    <div class="scan-line"></div>
+    <div class="os-header">
+      BURGESS-OS v0.508G<br>
+      <span style="font-size: 10px; color: #aaa;">SYS.STATUS: ONLINE // BIOME: MIDDLE CAMBRIAN</span>
     </div>
-    <div id="turbidity-overlay"></div>
-    <div id="info-panel">
-        <h2 id="info-title">Species Name</h2>
-        <p id="info-desc">Description goes here.</p>
-        <div class="close-btn" onclick="resumeTime()">RESUME SIMULATION</div>
+    <div class="os-stats" id="stats">
+      EVOLUTION LEVEL: 1.00<br>
+      TARGETS: SCANNING...
     </div>
+    <div id="target-reticle"></div>
+  </div>
+  <div id="turbidity-overlay"></div>
+  <div id="info-panel">
+    <h2 id="info-title">Species Name</h2>
+    <p id="info-desc">Description goes here.</p>
+    <div class="close-btn" onclick="resumeTime()">RESUME SIMULATION</div>
+  </div>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // --- Core Variables ---
-        let scene, camera, renderer, controls;
-        let clock = new THREE.Clock();
-        let timeScale = 1.0;
-        let globalTime = 0;
-        let evolutionLevel = 1.0;
-        let cycleTimer = 0;
-        
-        // Ecosystem Arrays
-        const entities = [];
-        let anomalocaris;
+    // --- Core Variables ---
+    let scene, camera, renderer, controls;
+    let clock = new THREE.Clock();
+    let timeScale = 1.0;
+    let globalTime = 0;
+    let evolutionLevel = 1.0;
+    let cycleTimer = 0;
+    
+    const entities = [];
+    let anomalocaris;
 
-        // --- Initialize Scene ---
-        function init() {
-            const container = document.getElementById('canvas-container');
-            
-            // Renderer
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            // Deep sea fog
-            renderer.setClearColor(0x001122);
-            container.appendChild(renderer.domElement);
-
-            // Scene & Fog
-            scene = new THREE.Scene();
-            scene.fog = new THREE.FogExp2(0x001122, 0.015);
-
-            // Camera
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
-            camera.position.set(0, 15, 30);
-
-            // Controls (1-finger orbit, 2-finger zoom)
-            controls = new OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-            controls.dampingFactor = 0.05;
-            controls.maxPolarAngle = Math.PI / 2 - 0.1; // Don't go below sea floor
-            controls.minDistance = 5;
-            controls.maxDistance = 60;
-
-            // Lighting
-            const ambientLight = new THREE.AmbientLight(0x003355, 1.0);
-            scene.add(ambientLight);
-            
-            const dirLight = new THREE.DirectionalLight(0x4488ff, 1.5);
-            dirLight.position.set(10, 50, 20);
-            scene.add(dirLight);
-
-            // Procedural Environment setup
-            buildEnvironment();
-
-            // Populate Ecosystem
-            anomalocaris = new Anomalocaris();
-            entities.push(anomalocaris);
-
-            for(let i=0; i<8; i++) entities.push(new Trilobite());
-            for(let i=0; i<3; i++) entities.push(new Hurdia());
-            for(let i=0; i<2; i++) entities.push(new Opabinia());
-
-            // Interaction Event
-            window.addEventListener('resize', onWindowResize);
-            renderer.domElement.addEventListener('pointerdown', onPointerDown);
-
-            animate();
+    // --- Procedural Shaders & Materials ---
+    const amberShader = {
+      uniforms: {
+        time: { value: 0 },
+        evolution: { value: 1.0 },
+        baseColor: { value: new THREE.Color(0x994411) },
+        rimColor: { value: new THREE.Color(0xffaa22) }
+      },
+      vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vViewPosition;
+        varying vec2 vUv;
+        void main() {
+          vNormal = normalize(normalMatrix * normal);
+          vUv = uv;
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          vViewPosition = -mvPosition.xyz;
+          gl_Position = projectionMatrix * mvPosition;
         }
+      `,
+      fragmentShader: `
+        uniform float evolution;
+        uniform vec3 baseColor;
+        uniform vec3 rimColor;
+        varying vec3 vNormal;
+        varying vec3 vViewPosition;
+        varying vec2 vUv;
+        void main() {
+          vec3 normal = normalize(vNormal);
+          vec3 viewDir = normalize(vViewPosition);
+          float fresnel = dot(viewDir, normal);
+          fresnel = clamp(1.0 - fresnel, 0.0, 1.0);
+          fresnel = pow(fresnel, 2.5);
+          float dots = sin(vUv.x * 60.0) * sin(vUv.y * 60.0);
+          vec3 color = mix(baseColor, vec3(0.5, 0.1, 0.0), step(0.9, dots) * 0.3);
+          vec3 finalColor = color + (rimColor * fresnel * evolution);
+          gl_FragColor = vec4(finalColor, 0.7 + fresnel * 0.3);
+        }
+      `,
+      transparent: true,
+      side: THREE.DoubleSide
+    };
 
-        // --- Procedural Shaders & Materials ---
+    const floorMaterial = new THREE.ShaderMaterial({
+      uniforms: { time: { value: 0 } },
+      vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vPos;
+        void main() {
+          vUv = uv;
+          vPos = position;
+          float bump = sin(position.x * 0.5) * cos(position.z * 0.5) * 2.0;
+          vec3 pos = position + vec3(0.0, bump, 0.0);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float time;
+        varying vec2 vUv;
+        varying vec3 vPos;
+        void main() {
+          vec3 baseColor = vec3(0.05, 0.1, 0.15);
+          vec2 p = vPos.xz * 0.2;
+          for(int i = 1; i < 4; i++) {
+            vec2 newp = p;
+            newp.x += 0.6 / float(i) * sin(float(i) * p.y + time * 0.5 + 0.3);
+            newp.y += 0.6 / float(i) * cos(float(i) * p.x + time * 0.5 + 0.3);
+            p = newp;
+          }
+          float caustics = max(0.0, sin(p.x + p.y));
+          caustics = pow(caustics, 3.0);
+          vec3 color = baseColor + vec3(0.1, 0.4, 0.6) * caustics * 0.5;
+          float fade = smoothstep(100.0, 0.0, length(vPos));
+          gl_FragColor = vec4(color * fade, 1.0);
+        }
+      `
+    });
 
-        // 1. Amber Translucent Shader (Anomalocaris)
-        const amberShader = {
-            uniforms: {
-                time: { value: 0 },
-                evolution: { value: 1.0 },
-                baseColor: { value: new THREE.Color(0x994411) },
-                rimColor: { value: new THREE.Color(0xffaa22) }
-            },
-            vertexShader: `
-                varying vec3 vNormal;
-                varying vec3 vViewPosition;
-                varying vec2 vUv;
-                void main() {
-                    vNormal = normalize(normalMatrix * normal);
-                    vUv = uv;
-                    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-                    vViewPosition = -mvPosition.xyz;
-                    gl_Position = projectionMatrix * mvPosition;
-                }
-            `,
-            fragmentShader: `
-                uniform float evolution;
-                uniform vec3 baseColor;
-                uniform vec3 rimColor;
-                varying vec3 vNormal;
-                varying vec3 vViewPosition;
-                varying vec2 vUv;
-                void main() {
-                    vec3 normal = normalize(vNormal);
-                    vec3 viewDir = normalize(vViewPosition);
-                    
-                    // Fresnel (Rim light)
-                    float fresnel = dot(viewDir, normal);
-                    fresnel = clamp(1.0 - fresnel, 0.0, 1.0);
-                    fresnel = pow(fresnel, 2.5);
-                    
-                    // Internal dots (Muscle/Fluid texture)
-                    float dots = sin(vUv.x * 60.0) * sin(vUv.y * 60.0);
-                    vec3 color = mix(baseColor, vec3(0.5, 0.1, 0.0), step(0.9, dots) * 0.3);
-                    
-                    // Add Rim and Evolution Glow
-                    vec3 finalColor = color + (rimColor * fresnel * evolution);
-                    
-                    gl_FragColor = vec4(finalColor, 0.7 + fresnel * 0.3); // Semi-transparent
-                }
-            `,
-            transparent: true,
-            side: THREE.DoubleSide
-        };
+    // --- Initialize Scene ---
+    function init() {
+      const container = document.getElementById('canvas-container');
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setClearColor(0x001122);
+      container.appendChild(renderer.domElement);
 
-        // 2. Sea Floor Caustics Shader (Environment)
-        const floorMaterial = new THREE.ShaderMaterial({
-            uniforms: { time: { value: 0 } },
-            vertexShader: `
-                varying vec2 vUv;
-                varying vec3 vPos;
-                void main() {
-                    vUv = uv;
-                    vPos = position;
-                    // Procedural bump (Shale representation)
-                    float bump = sin(position.x * 0.5) * cos(position.z * 0.5) * 2.0;
-                    vec3 pos = position + vec3(0.0, bump, 0.0);
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-                }
-            `,
-            fragmentShader: `
-                uniform float time;
-                varying vec2 vUv;
-                varying vec3 vPos;
-                void main() {
-                    vec3 baseColor = vec3(0.05, 0.1, 0.15); // Dark shale
-                    
-                    // Caustics generation (Math based light net)
-                    vec2 p = vPos.xz * 0.2;
-                    for(int i = 1; i < 4; i++) {
-                        vec2 newp = p;
-                        newp.x += 0.6 / float(i) * sin(float(i) * p.y + time * 0.5 + 0.3);
-                        newp.y += 0.6 / float(i) * cos(float(i) * p.x + time * 0.5 + 0.3);
-                        p = newp;
-                    }
-                    float caustics = max(0.0, sin(p.x + p.y));
-                    caustics = pow(caustics, 3.0);
-                    
-                    vec3 color = baseColor + vec3(0.1, 0.4, 0.6) * caustics * 0.5;
-                    // Depth fade
-                    float fade = smoothstep(100.0, 0.0, length(vPos));
-                    gl_FragColor = vec4(color * fade, 1.0);
-                }
-            `
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x001122, 0.015);
+
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
+      camera.position.set(0, 15, 30);
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.maxPolarAngle = Math.PI / 2 - 0.1;
+      controls.minDistance = 5;
+      controls.maxDistance = 60;
+
+      const ambientLight = new THREE.AmbientLight(0x003355, 1.0);
+      scene.add(ambientLight);
+      const dirLight = new THREE.DirectionalLight(0x4488ff, 1.5);
+      dirLight.position.set(10, 50, 20);
+      scene.add(dirLight);
+
+      buildEnvironment();
+
+      anomalocaris = new Anomalocaris();
+      entities.push(anomalocaris);
+      for(let i = 0; i < 8; i++) entities.push(new Trilobite());
+      for(let i = 0; i < 3; i++) entities.push(new Hurdia());
+      for(let i = 0; i < 2; i++) entities.push(new Opabinia());
+
+      window.addEventListener('resize', onWindowResize);
+      renderer.domElement.addEventListener('pointerdown', onPointerDown);
+
+      animate();
+    }
+
+    // --- Build Environment ---
+    function buildEnvironment() {
+      const floorGeo = new THREE.PlaneGeometry(200, 200, 64, 64);
+      floorGeo.rotateX(-Math.PI / 2);
+      const floor = new THREE.Mesh(floorGeo, floorMaterial);
+      floor.position.y = -10;
+      scene.add(floor);
+
+      const algaeGeo = new THREE.CylinderGeometry(0.1, 0.3, 5, 8);
+      algaeGeo.translate(0, 2.5, 0);
+      const algaeMat = new THREE.MeshBasicMaterial({ color: 0x114422, transparent: true, opacity: 0.8 });
+      
+      for(let i = 0; i < 30; i++) {
+        const algae = new THREE.Mesh(algaeGeo, algaeMat);
+        algae.position.set((Math.random() - 0.5) * 80, -10, (Math.random() - 0.5) * 80);
+        algae.userData.phaseOffset = Math.random() * Math.PI * 2;
+        scene.add(algae);
+        entities.push({
+          type: 'algae', mesh: algae,
+          update: (t) => {
+            algae.rotation.z = Math.sin(t * 1.5 + algae.userData.phaseOffset) * 0.2;
+            algae.rotation.x = Math.cos(t * 1.0 + algae.userData.phaseOffset) * 0.2;
+          }
         });
-
-        // --- Build Environment ---
-        function buildEnvironment() {
-            // Floor
-            const floorGeo = new THREE.PlaneGeometry(200, 200, 64, 64);
-            floorGeo.rotateX(-Math.PI / 2);
-            const floor = new THREE.Mesh(floorGeo, floorMaterial);
-            floor.position.y = -10;
-            scene.add(floor);
-
-            // Procedural Sponges/Algae
-            const algaeGeo = new THREE.CylinderGeometry(0.1, 0.3, 5, 8);
-            algaeGeo.translate(0, 2.5, 0); // Origin at bottom
-            const algaeMat = new THREE.MeshBasicMaterial({ color: 0x114422, transparent: true, opacity: 0.8 });
-            
-            for(let i=0; i<30; i++) {
-                const algae = new THREE.Mesh(algaeGeo, algaeMat);
-                algae.position.set((Math.random()-0.5)*80, -10, (Math.random()-0.5)*80);
-                algae.userData.phaseOffset = Math.random() * Math.PI * 2;
-                scene.add(algae);
-                entities.push({
-                    type: 'algae', mesh: algae, 
-                    update: (t) => {
-                        algae.rotation.z = Math.sin(t * 1.5 + algae.userData.phaseOffset) * 0.2;
-                        algae.rotation.x = Math.cos(t * 1.0 + algae.userData.phaseOffset) * 0.2;
-                    }
-                });
-            }
-        }
-
-        // --- Creature Classes (Procedural Geometry & Kinematics Update) ---
-
-// Anomalocaris (Apex Predator)
-class Anomalocaris {
-  constructor() {
-    this.type = 'Anomalocaris';
-    this.mesh = new THREE.Group();
-    this.velocity = new THREE.Vector3(0, 0, 0.05);
-    this.isAttacking = false;
-    this.attackProgress = 0;
-    
-    const material = new THREE.ShaderMaterial(amberShader);
-    this.materialUniforms = material.uniforms;
-    
-    // Body: より扁平で滑らかなテーパリングを持つ体節
-    this.segments = [];
-    for(let i=0; i<12; i++) {
-      const radius = i < 3 ? 1.0 - (i*0.05) : 0.85 - ((i-3)*0.08);
-      const geo = new THREE.SphereGeometry(radius, 24, 16);
-      geo.scale(1.2, 0.4, 1.0); // カンブリア紀の遊泳生物らしい扁平率
-      const mesh = new THREE.Mesh(geo, material);
-      mesh.position.z = -i * 0.8;
-      this.segments.push(mesh);
-      this.mesh.add(mesh);
+      }
     }
 
-    // Eyes: 複眼を意識した暗色の球体（眼柄を追加可能）
-    const eyeGeo = new THREE.SphereGeometry(0.35, 16, 16);
-    const eyeMat = new THREE.MeshLambertMaterial({ color: 0x050505 });
-    const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-    leftEye.position.set(0.9, 0.4, 0.3);
-    const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-    rightEye.position.set(-0.9, 0.4, 0.3);
-    this.segments[0].add(leftEye, rightEye); // 頭部に追従させる
-
-    // Frontal Appendages: 関節を感じさせるカーブ
-    this.appendages = [];
-    const appGeo = new THREE.CylinderGeometry(0.12, 0.04, 2.5, 8);
-    appGeo.translate(0, -1.25, 0); 
-    for(let i=-1; i<=1; i+=2) {
-      const app = new THREE.Mesh(appGeo, material);
-      app.position.set(i * 0.4, -0.2, 1.2);
-      app.rotation.x = Math.PI / 2.2;
-      this.appendages.push(app);
-      this.segments[0].add(app);
-    }
-
-    // Metachronal Wave Flaps: 形状の最適化
-    this.flaps = [];
-    const flapGeo = new THREE.PlaneGeometry(3.5, 1.5);
-    flapGeo.translate(1.75, 0, 0); 
-    for(let i=0; i<14; i++) {
-      const flapR = new THREE.Mesh(flapGeo, material);
-      flapR.position.set(0.5, -0.1, -i * 0.65);
-      const flapL = new THREE.Mesh(flapGeo, material);
-      flapL.position.set(-0.5, -0.1, -i * 0.65);
-      flapL.rotation.y = Math.PI; 
-      this.mesh.add(flapR, flapL);
-      this.flaps.push({ r: flapR, l: flapL, index: i });
-    }
-    
-    // Tail Fan: 尾扇（操舵に不可欠な部位）を追加
-    const tailGeo = new THREE.PlaneGeometry(2.5, 3);
-    tailGeo.rotateX(-Math.PI/2);
-    const tailFan = new THREE.Mesh(tailGeo, material);
-    tailFan.position.set(0, 0, -10.5);
-    this.mesh.add(tailFan);
-
-    scene.add(this.mesh);
-    this.mesh.position.set(0, 0, 0);
-  }
-
-  update(t, delta) {
-    this.materialUniforms.time.value = t;
-    this.materialUniforms.evolution.value = evolutionLevel;
-    
-    // 遊泳軌道の微細な揺らぎ
-    this.mesh.rotation.y += Math.sin(t * 0.4) * 0.012;
-    this.mesh.translateZ(0.1 * evolutionLevel * timeScale);
-
-    if(this.mesh.position.length() > 40) {
-      this.mesh.position.multiplyScalar(0.99);
-      this.mesh.rotation.y += 0.05;
-    }
-    if(this.mesh.position.y > 10) this.mesh.position.y -= 0.1;
-    if(this.mesh.position.y < -5) this.mesh.position.y += 0.1;
-
-    // Metachronal Wave: 位相シフトの計算をより流体力学的に
-    this.flaps.forEach(flap => {
-      const phase = t * 7.0 - flap.index * 0.5;
-      const angle = Math.sin(phase) * 0.45;
-      flap.r.rotation.z = angle;
-      flap.l.rotation.z = -angle;
-    });
-
-    // Body undulation: ロールとヨーを組み合わせた自然な体幹のうねり
-    this.segments.forEach((seg, i) => {
-      seg.position.x = Math.sin(t * 2.5 - i * 0.4) * 0.15;
-      seg.rotation.y = Math.cos(t * 2.5 - i * 0.4) * 0.08;
-    });
-
-    if (this.isAttacking) {
-      this.attackProgress += delta * 6.0;
-      const angle = Math.sin(this.attackProgress) * Math.PI / 1.5;
-      this.appendages.forEach((app, i) => {
-        app.rotation.x = Math.PI / 2.2 + angle;
-        app.rotation.z = (i===0 ? 1 : -1) * angle * 0.6; // 獲物を抱え込む動作
-      });
-      if(this.attackProgress > Math.PI) {
+    // --- Creature Classes ---
+    class Anomalocaris {
+      constructor() {
+        this.type = 'Anomalocaris';
+        this.mesh = new THREE.Group();
+        this.velocity = new THREE.Vector3(0, 0, 0.05);
         this.isAttacking = false;
         this.attackProgress = 0;
-        this.appendages.forEach(app => { app.rotation.set(Math.PI/2.2,0,0); });
-        growEvolve();
+        
+        const material = new THREE.ShaderMaterial(amberShader);
+        this.materialUniforms = material.uniforms;
+        
+        this.segments = [];
+        for(let i = 0; i < 12; i++) {
+          const radius = i < 3 ? 1.0 - (i * 0.05) : 0.85 - ((i - 3) * 0.08);
+          const geo = new THREE.SphereGeometry(radius, 24, 16);
+          geo.scale(1.2, 0.4, 1.0);
+          const mesh = new THREE.Mesh(geo, material);
+          mesh.position.z = -i * 0.8;
+          this.segments.push(mesh);
+          this.mesh.add(mesh);
+        }
+
+        const eyeGeo = new THREE.SphereGeometry(0.35, 16, 16);
+        const eyeMat = new THREE.MeshLambertMaterial({ color: 0x050505 });
+        const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+        leftEye.position.set(0.9, 0.4, 0.3);
+        const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+        rightEye.position.set(-0.9, 0.4, 0.3);
+        this.segments[0].add(leftEye, rightEye);
+
+        this.appendages = [];
+        const appGeo = new THREE.CylinderGeometry(0.12, 0.04, 2.5, 8);
+        appGeo.translate(0, -1.25, 0); 
+        for(let i = -1; i <= 1; i += 2) {
+          const app = new THREE.Mesh(appGeo, material);
+          app.position.set(i * 0.4, -0.2, 1.2);
+          app.rotation.x = Math.PI / 2.2;
+          this.appendages.push(app);
+          this.segments[0].add(app);
+        }
+
+        this.flaps = [];
+        const flapGeo = new THREE.PlaneGeometry(3.5, 1.5);
+        flapGeo.translate(1.75, 0, 0); 
+        for(let i = 0; i < 14; i++) {
+          const flapR = new THREE.Mesh(flapGeo, material);
+          flapR.position.set(0.5, -0.1, -i * 0.65);
+          const flapL = new THREE.Mesh(flapGeo, material);
+          flapL.position.set(-0.5, -0.1, -i * 0.65);
+          flapL.rotation.y = Math.PI; 
+          this.mesh.add(flapR, flapL);
+          this.flaps.push({ r: flapR, l: flapL, index: i });
+        }
+        
+        const tailGeo = new THREE.PlaneGeometry(2.5, 3);
+        tailGeo.rotateX(-Math.PI / 2);
+        const tailFan = new THREE.Mesh(tailGeo, material);
+        tailFan.position.set(0, 0, -10.5);
+        this.mesh.add(tailFan);
+
+        scene.add(this.mesh);
+        this.mesh.position.set(0, 0, 0);
       }
-    } else {
-      let nearest = null;
-      let minDist = 15;
-      entities.forEach(e => {
-        if(e.type === 'Trilobite' || e.type === 'Opabinia') {
-          const dist = this.mesh.position.distanceTo(e.mesh.position);
-          if(dist < minDist) { minDist = dist; nearest = e; }
+
+      update(t, delta) {
+        this.materialUniforms.time.value = t;
+        this.materialUniforms.evolution.value = evolutionLevel;
+        
+        this.mesh.rotation.y += Math.sin(t * 0.4) * 0.012;
+        this.mesh.translateZ(0.1 * evolutionLevel * timeScale);
+
+        if(this.mesh.position.length() > 40) {
+          this.mesh.position.multiplyScalar(0.99);
+          this.mesh.rotation.y += 0.05;
         }
-      });
-      if(nearest) {
-        // スムーズな方向転換
-        const targetRotation = Math.atan2(nearest.mesh.position.x - this.mesh.position.x, nearest.mesh.position.z - this.mesh.position.z);
-        this.mesh.rotation.y += (targetRotation - this.mesh.rotation.y) * 0.05;
-        if(minDist < 3.5) {
-          this.isAttacking = true;
-          nearest.respawn(); 
-        }
-      }
-    }
-  }
-}
+        if(this.mesh.position.y > 10) this.mesh.position.y -= 0.1;
+        if(this.mesh.position.y < -5) this.mesh.position.y += 0.1;
 
-// Generic Entity Class (Base)
-class PreyEntity {
-  constructor(type, speed) {
-    this.type = type;
-    this.speed = speed;
-    this.mesh = new THREE.Group();
-    this.respawn();
-    scene.add(this.mesh);
-  }
-  respawn() {
-    this.mesh.position.set((Math.random()-0.5)*60, (Math.random()-0.5)*15 - 2, (Math.random()-0.5)*60);
-    this.target = new THREE.Vector3((Math.random()-0.5)*60, (Math.random()-0.5)*10, (Math.random()-0.5)*60);
-  }
-  update(t, delta) {
-    if(this.mesh.position.distanceTo(this.target) < 2) {
-      this.target.set((Math.random()-0.5)*60, (Math.random()-0.5)*10, (Math.random()-0.5)*60);
-    }
-    const dir = this.target.clone().sub(this.mesh.position).normalize();
-    this.mesh.lookAt(this.target);
-    this.mesh.position.add(dir.multiplyScalar(this.speed * timeScale));
-  }
-}
+        this.flaps.forEach(flap => {
+          const phase = t * 7.0 - flap.index * 0.5;
+          const angle = Math.sin(phase) * 0.45;
+          flap.r.rotation.z = angle;
+          flap.l.rotation.z = -angle;
+        });
 
-// Opabinia: 5つの眼と吻部（ノズル）の実装
-class Opabinia extends PreyEntity { 
-  constructor() { 
-    super('Opabinia', 0.035); 
-    const mat = new THREE.MeshLambertMaterial({ color: 0x4466aa });
-    
-    // Body Segments
-    this.segments = [];
-    for(let i=0; i<7; i++) {
-        const geo = new THREE.CylinderGeometry(0.25 - (i*0.02), 0.25 - (i*0.02), 0.4, 10);
-        geo.rotateX(Math.PI/2);
-        const seg = new THREE.Mesh(geo, mat);
-        seg.position.z = -i * 0.35;
-        this.segments.push(seg);
-        this.mesh.add(seg);
-    }
+        this.segments.forEach((seg, i) => {
+          seg.position.x = Math.sin(t * 2.5 - i * 0.4) * 0.15;
+          seg.rotation.y = Math.cos(t * 2.5 - i * 0.4) * 0.08;
+        });
 
-    // 5 Eyes (アイコン的特徴)
-    const eyeMat = new THREE.MeshLambertMaterial({ color: 0x000000 });
-    const eyePositions = [[0, 0.3, 0.15], [0.15, 0.3, 0], [-0.15, 0.3, 0], [0.2, 0.2, -0.15], [-0.2, 0.2, -0.15]];
-    eyePositions.forEach(pos => {
-        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), eyeMat);
-        eye.position.set(...pos);
-        this.segments[0].add(eye);
-    });
-
-    // Proboscis (象の鼻のような吻)
-    this.proboscis = [];
-    for(let i=0; i<5; i++) {
-        const node = new THREE.Mesh(new THREE.SphereGeometry(0.08 - (i*0.005), 8, 8), mat);
-        this.proboscis.push(node);
-        this.mesh.add(node);
-    }
-  }
-  update(t, delta) {
-    super.update(t, delta);
-    this.target.y = -9.0; // 底生スカベンジャーの振る舞い
-    
-    // 体幹のうねり（前進運動）
-    this.segments.forEach((seg, i) => {
-        seg.position.y = Math.sin(t * 5.0 - i * 0.6) * 0.08;
-    });
-
-    // 吻部による海底探査アニメーション
-    this.proboscis.forEach((node, i) => {
-        const offsetZ = 0.2 + (i * 0.15);
-        node.position.set(
-            this.segments[0].position.x + Math.sin(t * 3 + i) * 0.1,
-            this.segments[0].position.y + Math.cos(t * 2 + i) * 0.15 - 0.1,
-            this.segments[0].position.z + offsetZ
-        );
-    });
-  }
-}
-
-// Trilobite: 扁平な節足動物としての再定義
-class Trilobite extends PreyEntity { 
-  constructor() { 
-    super('Trilobite', 0.04); 
-    const mat = new THREE.MeshLambertMaterial({ color: 0x556655 });
-    
-    this.segments = [];
-    for(let i=0; i<5; i++) {
-      const width = i === 0 ? 0.6 : 0.5 - (i*0.05); // 頭部（頭鞍）を広く
-      const geo = new THREE.BoxGeometry(width, 0.15, 0.3);
-      const seg = new THREE.Mesh(geo, mat);
-      seg.position.z = -i * 0.28;
-      this.segments.push(seg);
-      this.mesh.add(seg);
-    }
-  }
-  update(t, delta) {
-    super.update(t, delta);
-    if(anomalocaris && this.mesh.position.distanceTo(anomalocaris.mesh.position) < 20) {
-      const fleeDir = this.mesh.position.clone().sub(anomalocaris.mesh.position).normalize();
-      this.target.copy(this.mesh.position).add(fleeDir.multiplyScalar(10));
-      this.mesh.position.y = -9.8; 
-    }
-    // 底を這うような微小なピッチ変動
-    this.segments.forEach((seg, i) => {
-      seg.rotation.x = Math.sin(t * 8.0 - i * 0.5) * 0.1;
-    });
-  }
-}
-
-// Hurdia: 巨大な頭部甲殻（Carapace）の強調
-class Hurdia extends PreyEntity { 
-  constructor() { 
-    super('Hurdia', 0.06); 
-    const mat = new THREE.MeshLambertMaterial({ color: 0xaa5533 });
-    
-    // Frontal Carapace (フルディア最大の特徴)
-    const headGeo = new THREE.CylinderGeometry(0, 0.5, 1.2, 3);
-    headGeo.rotateX(Math.PI/2);
-    const head = new THREE.Mesh(headGeo, mat);
-    head.position.z = 0.4;
-    this.mesh.add(head);
-
-    this.body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.8, 4, 8).rotateX(Math.PI/2), mat);
-    this.body.position.z = -0.5;
-    this.mesh.add(this.body);
-  }
-  update(t, delta) {
-    super.update(t, delta);
-    // 巨大な頭部による抵抗を表現した、やや重々しいロール
-    this.mesh.rotation.z = Math.sin(t * 4.0) * 0.15;
-    this.body.position.x = Math.sin(t * 6.0) * 0.1; // 尾部の推進
-  }
-}
-
-        function showInfo(type) {
-            timeScale = 0.2; // Slow motion
-            const panel = document.getElementById('info-panel');
-            const title = document.getElementById('info-title');
-            const desc = document.getElementById('info-desc');
-            
-            const database = {
-                'Anomalocaris': '【アノマロカリス】<br>カンブリア紀の頂点捕食者。巨大な前肢と円座状の口器を持つ。',
-                'Trilobite': '【三葉虫】<br>海底を這う節足動物。パニックAIにより捕食者から逃避する。',
-                'Hurdia': '【フルディア】<br>巨大な頭部甲殻を持つ。生態系における競合AIとして機能。',
-                'Opabinia': '【オパビニア】<br>5つの眼と象の鼻のような吻を持つ。スカベンジャーAI。'
-            };
-            
-            title.innerText = type;
-            desc.innerHTML = database[type] || 'NO DATA FOUND.';
-            panel.style.display = 'block';
-        }
-
-        window.resumeTime = function() {
-            timeScale = 1.0;
-            document.getElementById('info-panel').style.display = 'none';
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        // --- Main Animation Loop ---
-        function animate() {
-            requestAnimationFrame(animate);
-
-            const delta = clock.getDelta();
-            globalTime += delta * timeScale;
-
-            // Update Entities
-            entities.forEach(entity => {
-                if(entity.update) entity.update(globalTime, delta);
-            });
-
-            // Update Floor Shader Time
-            floorMaterial.uniforms.time.value = globalTime;
-
-            // Turbidity Current Cycle (Every 60 real seconds)
-            cycleTimer += delta;
-            if(cycleTimer > 60) {
-                cycleTimer = 0;
-                triggerTurbidityCurrent();
+        if (this.isAttacking) {
+          this.attackProgress += delta * 6.0;
+          const angle = Math.sin(this.attackProgress) * Math.PI / 1.5;
+          this.appendages.forEach((app, i) => {
+            app.rotation.x = Math.PI / 2.2 + angle;
+            app.rotation.z = (i === 0 ? 1 : -1) * angle * 0.6;
+          });
+          if(this.attackProgress > Math.PI) {
+            this.isAttacking = false;
+            this.attackProgress = 0;
+            this.appendages.forEach(app => { app.rotation.set(Math.PI / 2.2, 0, 0); });
+            growEvolve();
+          }
+        } else {
+          let nearest = null;
+          let minDist = 15;
+          entities.forEach(e => {
+            if(e.type === 'Trilobite' || e.type === 'Opabinia') {
+              const dist = this.mesh.position.distanceTo(e.mesh.position);
+              if(dist < minDist) { minDist = dist; nearest = e; }
             }
+          });
+          if(nearest) {
+            const targetRotation = Math.atan2(nearest.mesh.position.x - this.mesh.position.x, nearest.mesh.position.z - this.mesh.position.z);
+            this.mesh.rotation.y += (targetRotation - this.mesh.rotation.y) * 0.05;
+            if(minDist < 3.5) {
+              this.isAttacking = true;
+              nearest.respawn(); 
+            }
+          }
+        }
+      }
+    }
 
-            controls.update();
-            renderer.render(scene, camera);
+    class PreyEntity {
+      constructor(type, speed) {
+        this.type = type;
+        this.speed = speed;
+        this.mesh = new THREE.Group();
+        this.respawn();
+        scene.add(this.mesh);
+      }
+      respawn() {
+        this.mesh.position.set((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 15 - 2, (Math.random() - 0.5) * 60);
+        this.target = new THREE.Vector3((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 60);
+      }
+      update(t, delta) {
+        if(this.mesh.position.distanceTo(this.target) < 2) {
+          this.target.set((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 60);
+        }
+        const dir = this.target.clone().sub(this.mesh.position).normalize();
+        this.mesh.lookAt(this.target);
+        this.mesh.position.add(dir.multiplyScalar(this.speed * timeScale));
+      }
+    }
+
+    class Opabinia extends PreyEntity { 
+      constructor() { 
+        super('Opabinia', 0.035); 
+        const mat = new THREE.MeshLambertMaterial({ color: 0x4466aa });
+        
+        this.segments = [];
+        for(let i = 0; i < 7; i++) {
+            const geo = new THREE.CylinderGeometry(0.25 - (i * 0.02), 0.25 - (i * 0.02), 0.4, 10);
+            geo.rotateX(Math.PI / 2);
+            const seg = new THREE.Mesh(geo, mat);
+            seg.position.z = -i * 0.35;
+            this.segments.push(seg);
+            this.mesh.add(seg);
         }
 
-        // Run
-        init();
+        const eyeMat = new THREE.MeshLambertMaterial({ color: 0x000000 });
+        const eyePositions = [[0, 0.3, 0.15], [0.15, 0.3, 0], [-0.15, 0.3, 0], [0.2, 0.2, -0.15], [-0.2, 0.2, -0.15]];
+        eyePositions.forEach(pos => {
+            const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), eyeMat);
+            eye.position.set(...pos);
+            this.segments[0].add(eye);
+        });
 
-    </script>
+        this.proboscis = [];
+        for(let i = 0; i < 5; i++) {
+            const node = new THREE.Mesh(new THREE.SphereGeometry(0.08 - (i * 0.005), 8, 8), mat);
+            this.proboscis.push(node);
+            this.mesh.add(node);
+        }
+      }
+      update(t, delta) {
+        super.update(t, delta);
+        this.target.y = -9.0;
+        
+        this.segments.forEach((seg, i) => {
+            seg.position.y = Math.sin(t * 5.0 - i * 0.6) * 0.08;
+        });
+
+        this.proboscis.forEach((node, i) => {
+            const offsetZ = 0.2 + (i * 0.15);
+            node.position.set(
+                this.segments[0].position.x + Math.sin(t * 3 + i) * 0.1,
+                this.segments[0].position.y + Math.cos(t * 2 + i) * 0.15 - 0.1,
+                this.segments[0].position.z + offsetZ
+            );
+        });
+      }
+    }
+
+    class Trilobite extends PreyEntity { 
+      constructor() { 
+        super('Trilobite', 0.04); 
+        const mat = new THREE.MeshLambertMaterial({ color: 0x556655 });
+        
+        this.segments = [];
+        for(let i = 0; i < 5; i++) {
+          const width = i === 0 ? 0.6 : 0.5 - (i * 0.05);
+          const geo = new THREE.BoxGeometry(width, 0.15, 0.3);
+          const seg = new THREE.Mesh(geo, mat);
+          seg.position.z = -i * 0.28;
+          this.segments.push(seg);
+          this.mesh.add(seg);
+        }
+      }
+      update(t, delta) {
+        super.update(t, delta);
+        if(anomalocaris && this.mesh.position.distanceTo(anomalocaris.mesh.position) < 20) {
+          const fleeDir = this.mesh.position.clone().sub(anomalocaris.mesh.position).normalize();
+          this.target.copy(this.mesh.position).add(fleeDir.multiplyScalar(10));
+          this.mesh.position.y = -9.8; 
+        }
+        this.segments.forEach((seg, i) => {
+          seg.rotation.x = Math.sin(t * 8.0 - i * 0.5) * 0.1;
+        });
+      }
+    }
+
+    class Hurdia extends PreyEntity { 
+      constructor() { 
+        super('Hurdia', 0.06); 
+        const mat = new THREE.MeshLambertMaterial({ color: 0xaa5533 });
+        
+        const headGeo = new THREE.CylinderGeometry(0, 0.5, 1.2, 3);
+        headGeo.rotateX(Math.PI / 2);
+        const head = new THREE.Mesh(headGeo, mat);
+        head.position.z = 0.4;
+        this.mesh.add(head);
+
+        this.body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.8, 4, 8).rotateX(Math.PI / 2), mat);
+        this.body.position.z = -0.5;
+        this.mesh.add(this.body);
+      }
+      update(t, delta) {
+        super.update(t, delta);
+        this.mesh.rotation.z = Math.sin(t * 4.0) * 0.15;
+        this.body.position.x = Math.sin(t * 6.0) * 0.1;
+      }
+    }
+
+    // --- System Logic & Interaction ---
+    function growEvolve() {
+      evolutionLevel += 0.05;
+      anomalocaris.mesh.scale.setScalar(1.0 + (evolutionLevel - 1.0) * 0.5);
+      document.getElementById('stats').innerHTML = `EVOLUTION LEVEL: ${evolutionLevel.toFixed(2)}<br>TARGETS: PREDATION SUCCESS`;
+    }
+
+    function triggerTurbidityCurrent() {
+      const overlay = document.getElementById('turbidity-overlay');
+      overlay.style.opacity = 1;
+      setTimeout(() => {
+        entities.forEach(e => {
+          if(e.respawn) e.respawn();
+          else if(e.type === 'Anomalocaris') e.mesh.position.set(0,0,0);
+        });
+        overlay.style.opacity = 0;
+      }, 2000);
+    }
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    function onPointerDown(event) {
+      const x = event.touches ? event.touches[0].clientX : event.clientX;
+      const y = event.touches ? event.touches[0].clientY : event.clientY;
+      
+      mouse.x = (x / window.innerWidth) * 2 - 1;
+      mouse.y = -(y / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      
+      const checkMeshes = [];
+      entities.forEach(e => { if(e.mesh && e.type !== 'algae') checkMeshes.push(e.mesh); });
+      const intersects = raycaster.intersectObjects(checkMeshes, true);
+      
+      if (intersects.length > 0) {
+        let object = intersects[0].object;
+        while(object.parent && object.parent.type === 'Group') {
+          object = object.parent;
+        }
+        
+        const entity = entities.find(e => e.mesh === object || e.mesh.children.includes(object));
+        if(entity) {
+          showInfo(entity.type);
+          if(entity.type === 'Anomalocaris') entity.isAttacking = true;
+        }
+      }
+    }
+
+    function showInfo(type) {
+      timeScale = 0.2;
+      const panel = document.getElementById('info-panel');
+      const title = document.getElementById('info-title');
+      const desc = document.getElementById('info-desc');
+      
+      const database = {
+        'Anomalocaris': '【アノマロカリス】<br>カンブリア紀の頂点捕食者。巨大な前肢と円座状の口器を持つ。',
+        'Trilobite': '【三葉虫】<br>海底を這う節足動物。パニック AI により捕食者から逃避する。',
+        'Hurdia': '【フルディア】<br>巨大な頭部甲殻を持つ。生態系における競合 AI として機能。',
+        'Opabinia': '【オパビニア】<br>5 つの眼と象の鼻のような吻を持つ。スカベンジャーAI。'
+      };
+
+      title.innerText = type;
+      desc.innerHTML = database[type] || 'NO DATA FOUND.';
+      panel.style.display = 'block';
+    }
+
+    window.resumeTime = function() {
+      timeScale = 1.0;
+      document.getElementById('info-panel').style.display = 'none';
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      globalTime += delta * timeScale;
+
+      entities.forEach(entity => {
+        if(entity.update) entity.update(globalTime, delta);
+      });
+
+      floorMaterial.uniforms.time.value = globalTime;
+
+      cycleTimer += delta;
+      if(cycleTimer > 60) {
+        cycleTimer = 0;
+        triggerTurbidityCurrent();
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    init();
+  </script>
 </body>
 </html>
