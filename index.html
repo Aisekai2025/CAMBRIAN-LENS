@@ -326,252 +326,274 @@
             }
         }
 
-        // --- Creature Classes (Procedural Geometry & AI) ---
+        // --- Creature Classes (Procedural Geometry & Kinematics Update) ---
 
-        // Anomalocaris (Apex Predator)
-        class Anomalocaris {
-            constructor() {
-                this.type = 'Anomalocaris';
-                this.mesh = new THREE.Group();
-                this.velocity = new THREE.Vector3(0, 0, 0.05);
-                this.isAttacking = false;
-                this.attackProgress = 0;
-                
-                const material = new THREE.ShaderMaterial(amberShader);
-                this.materialUniforms = material.uniforms;
+// Anomalocaris (Apex Predator)
+class Anomalocaris {
+  constructor() {
+    this.type = 'Anomalocaris';
+    this.mesh = new THREE.Group();
+    this.velocity = new THREE.Vector3(0, 0, 0.05);
+    this.isAttacking = false;
+    this.attackProgress = 0;
+    
+    const material = new THREE.ShaderMaterial(amberShader);
+    this.materialUniforms = material.uniforms;
+    
+    // Body: より扁平で滑らかなテーパリングを持つ体節
+    this.segments = [];
+    for(let i=0; i<12; i++) {
+      const radius = i < 3 ? 1.0 - (i*0.05) : 0.85 - ((i-3)*0.08);
+      const geo = new THREE.SphereGeometry(radius, 24, 16);
+      geo.scale(1.2, 0.4, 1.0); // カンブリア紀の遊泳生物らしい扁平率
+      const mesh = new THREE.Mesh(geo, material);
+      mesh.position.z = -i * 0.8;
+      this.segments.push(mesh);
+      this.mesh.add(mesh);
+    }
 
-                // Body (Procedural segmented look via overlapping spheres)
-                this.segments = [];
-                for(let i=0; i<10; i++) {
-                    const radius = i < 3 ? 1.0 - i*0.1 : 0.7 - (i-3)*0.08;
-                    const geo = new THREE.SphereGeometry(radius, 16, 16);
-                    geo.scale(1, 0.6, 1.2);
-                    const mesh = new THREE.Mesh(geo, material);
-                    mesh.position.z = -i * 0.8;
-                    this.segments.push(mesh);
-                    this.mesh.add(mesh);
-                }
+    // Eyes: 複眼を意識した暗色の球体（眼柄を追加可能）
+    const eyeGeo = new THREE.SphereGeometry(0.35, 16, 16);
+    const eyeMat = new THREE.MeshLambertMaterial({ color: 0x050505 });
+    const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+    leftEye.position.set(0.9, 0.4, 0.3);
+    const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+    rightEye.position.set(-0.9, 0.4, 0.3);
+    this.segments[0].add(leftEye, rightEye); // 頭部に追従させる
 
-                // Eyes
-                const eyeGeo = new THREE.SphereGeometry(0.3, 16, 16);
-                const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
-                const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-                leftEye.position.set(0.8, 0.5, 0.5);
-                const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-                rightEye.position.set(-0.8, 0.5, 0.5);
-                this.mesh.add(leftEye, rightEye);
+    // Frontal Appendages: 関節を感じさせるカーブ
+    this.appendages = [];
+    const appGeo = new THREE.CylinderGeometry(0.12, 0.04, 2.5, 8);
+    appGeo.translate(0, -1.25, 0); 
+    for(let i=-1; i<=1; i+=2) {
+      const app = new THREE.Mesh(appGeo, material);
+      app.position.set(i * 0.4, -0.2, 1.2);
+      app.rotation.x = Math.PI / 2.2;
+      this.appendages.push(app);
+      this.segments[0].add(app);
+    }
 
-                // Frontal Appendages (Curved cylinders)
-                this.appendages = [];
-                const appGeo = new THREE.CylinderGeometry(0.1, 0.2, 2, 8);
-                appGeo.translate(0, -1, 0); // Pivot at top
-                for(let i=-1; i<=1; i+=2) {
-                    const app = new THREE.Mesh(appGeo, material);
-                    app.position.set(i * 0.4, 0, 1.0);
-                    app.rotation.x = Math.PI / 2; // Point forward
-                    this.appendages.push(app);
-                    this.mesh.add(app);
-                }
+    // Metachronal Wave Flaps: 形状の最適化
+    this.flaps = [];
+    const flapGeo = new THREE.PlaneGeometry(3.5, 1.5);
+    flapGeo.translate(1.75, 0, 0); 
+    for(let i=0; i<14; i++) {
+      const flapR = new THREE.Mesh(flapGeo, material);
+      flapR.position.set(0.5, -0.1, -i * 0.65);
+      const flapL = new THREE.Mesh(flapGeo, material);
+      flapL.position.set(-0.5, -0.1, -i * 0.65);
+      flapL.rotation.y = Math.PI; 
+      this.mesh.add(flapR, flapL);
+      this.flaps.push({ r: flapR, l: flapL, index: i });
+    }
+    
+    // Tail Fan: 尾扇（操舵に不可欠な部位）を追加
+    const tailGeo = new THREE.PlaneGeometry(2.5, 3);
+    tailGeo.rotateX(-Math.PI/2);
+    const tailFan = new THREE.Mesh(tailGeo, material);
+    tailFan.position.set(0, 0, -10.5);
+    this.mesh.add(tailFan);
 
-                // 14 pairs of flaps for Metachronal Wave
-                this.flaps = [];
-                const flapGeo = new THREE.PlaneGeometry(3, 1.5);
-                flapGeo.translate(1.5, 0, 0); // Pivot at body
-                for(let i=0; i<14; i++) {
-                    // Right
-                    const flapR = new THREE.Mesh(flapGeo, material);
-                    flapR.position.set(0.5, -0.2, -i * 0.5);
-                    // Left
-                    const flapL = new THREE.Mesh(flapGeo, material);
-                    flapL.position.set(-0.5, -0.2, -i * 0.5);
-                    flapL.rotation.y = Math.PI; // Flip
-                    
-                    this.mesh.add(flapR, flapL);
-                    this.flaps.push({ r: flapR, l: flapL, index: i });
-                }
+    scene.add(this.mesh);
+    this.mesh.position.set(0, 0, 0);
+  }
 
-                scene.add(this.mesh);
-                this.mesh.position.set(0, 0, 0);
-            }
+  update(t, delta) {
+    this.materialUniforms.time.value = t;
+    this.materialUniforms.evolution.value = evolutionLevel;
+    
+    // 遊泳軌道の微細な揺らぎ
+    this.mesh.rotation.y += Math.sin(t * 0.4) * 0.012;
+    this.mesh.translateZ(0.1 * evolutionLevel * timeScale);
 
-            update(t, delta) {
-                // Shader update
-                this.materialUniforms.time.value = t;
-                this.materialUniforms.evolution.value = evolutionLevel;
+    if(this.mesh.position.length() > 40) {
+      this.mesh.position.multiplyScalar(0.99);
+      this.mesh.rotation.y += 0.05;
+    }
+    if(this.mesh.position.y > 10) this.mesh.position.y -= 0.1;
+    if(this.mesh.position.y < -5) this.mesh.position.y += 0.1;
 
-                // Swim physics (Continuous forward, slight sine wave steering)
-                this.mesh.rotation.y += Math.sin(t * 0.5) * 0.01;
-                this.mesh.translateZ(0.1 * evolutionLevel * timeScale);
-                
-                // Boundaries
-                if(this.mesh.position.length() > 40) {
-                    this.mesh.position.multiplyScalar(0.99);
-                    this.mesh.rotation.y += 0.05;
-                }
-                if(this.mesh.position.y > 10) this.mesh.position.y -= 0.1;
-                if(this.mesh.position.y < -5) this.mesh.position.y += 0.1;
+    // Metachronal Wave: 位相シフトの計算をより流体力学的に
+    this.flaps.forEach(flap => {
+      const phase = t * 7.0 - flap.index * 0.5;
+      const angle = Math.sin(phase) * 0.45;
+      flap.r.rotation.z = angle;
+      flap.l.rotation.z = -angle;
+    });
 
-                // Metachronal Wave (14 flaps, phase shifted)
-                this.flaps.forEach(flap => {
-                    const phase = t * 8.0 - flap.index * 0.6;
-                    const angle = Math.sin(phase) * 0.4;
-                    flap.r.rotation.z = angle;
-                    flap.l.rotation.z = -angle;
-                });
+    // Body undulation: ロールとヨーを組み合わせた自然な体幹のうねり
+    this.segments.forEach((seg, i) => {
+      seg.position.x = Math.sin(t * 2.5 - i * 0.4) * 0.15;
+      seg.rotation.y = Math.cos(t * 2.5 - i * 0.4) * 0.08;
+    });
 
-                // Body undulation
-                this.segments.forEach((seg, i) => {
-                    seg.position.x = Math.sin(t * 3.0 - i * 0.5) * 0.2;
-                });
-
-                // Attack Sequence Logic
-                if (this.isAttacking) {
-                    this.attackProgress += delta * 5.0;
-                    const angle = Math.sin(this.attackProgress) * Math.PI / 1.5;
-                    this.appendages.forEach((app, i) => {
-                        app.rotation.x = Math.PI / 2 + angle;
-                        app.rotation.z = (i===0 ? 1 : -1) * angle * 0.5; // Snap inwards
-                    });
-                    if(this.attackProgress > Math.PI) {
-                        this.isAttacking = false;
-                        this.attackProgress = 0;
-                        this.appendages.forEach(app => { app.rotation.set(Math.PI/2,0,0); });
-                        growEvolve();
-                    }
-                }
-
-                // AI: Hunt Trilobites
-                if(!this.isAttacking) {
-                    let nearest = null;
-                    let minDist = 15;
-                    entities.forEach(e => {
-                        if(e.type === 'Trilobite') {
-                            const dist = this.mesh.position.distanceTo(e.mesh.position);
-                            if(dist < minDist) { minDist = dist; nearest = e; }
-                        }
-                    });
-                    if(nearest) {
-                        this.mesh.lookAt(nearest.mesh.position);
-                        if(minDist < 3.0) {
-                            this.isAttacking = true;
-                            nearest.respawn(); // "Eaten"
-                        }
-                    }
-                }
-            }
+    if (this.isAttacking) {
+      this.attackProgress += delta * 6.0;
+      const angle = Math.sin(this.attackProgress) * Math.PI / 1.5;
+      this.appendages.forEach((app, i) => {
+        app.rotation.x = Math.PI / 2.2 + angle;
+        app.rotation.z = (i===0 ? 1 : -1) * angle * 0.6; // 獲物を抱え込む動作
+      });
+      if(this.attackProgress > Math.PI) {
+        this.isAttacking = false;
+        this.attackProgress = 0;
+        this.appendages.forEach(app => { app.rotation.set(Math.PI/2.2,0,0); });
+        growEvolve();
+      }
+    } else {
+      let nearest = null;
+      let minDist = 15;
+      entities.forEach(e => {
+        if(e.type === 'Trilobite' || e.type === 'Opabinia') {
+          const dist = this.mesh.position.distanceTo(e.mesh.position);
+          if(dist < minDist) { minDist = dist; nearest = e; }
         }
-
-        // Generic Entity Class for other AI
-        class PreyEntity {
-            constructor(type, color, size, speed) {
-                this.type = type;
-                this.speed = speed;
-                this.mesh = new THREE.Group();
-                
-                const geo = new THREE.CapsuleGeometry(size, size*1.5, 4, 8);
-                geo.rotateX(Math.PI/2);
-                const mat = new THREE.MeshLambertMaterial({ color: color });
-                const body = new THREE.Mesh(geo, mat);
-                this.mesh.add(body);
-                
-                this.respawn();
-                scene.add(this.mesh);
-            }
-            respawn() {
-                this.mesh.position.set((Math.random()-0.5)*60, (Math.random()-0.5)*15 - 2, (Math.random()-0.5)*60);
-                this.target = new THREE.Vector3((Math.random()-0.5)*60, (Math.random()-0.5)*10, (Math.random()-0.5)*60);
-            }
-            update(t, delta) {
-                // Basic wandering
-                if(this.mesh.position.distanceTo(this.target) < 2) {
-                    this.target.set((Math.random()-0.5)*60, (Math.random()-0.5)*10, (Math.random()-0.5)*60);
-                }
-                
-                // Specific AI Behaviors
-                if(this.type === 'Trilobite') {
-                    // Panic AI: flee from Anomalocaris
-                    if(anomalocaris && this.mesh.position.distanceTo(anomalocaris.mesh.position) < 20) {
-                        const fleeDir = this.mesh.position.clone().sub(anomalocaris.mesh.position).normalize();
-                        this.target.copy(this.mesh.position).add(fleeDir.multiplyScalar(10));
-                        this.mesh.position.y = -9.5; // Hide on floor
-                    }
-                } else if(this.type === 'Opabinia') {
-                    // Scavenger: stay near floor
-                    this.target.y = -9;
-                } else if(this.type === 'Hurdia') {
-                    // Competitor: chase Trilobites too
-                }
-
-                // Move towards target
-                const dir = this.target.clone().sub(this.mesh.position).normalize();
-                this.mesh.lookAt(this.target);
-                this.mesh.position.add(dir.multiplyScalar(this.speed * timeScale));
-                
-                // Wiggle animation
-                this.mesh.rotation.z = Math.sin(t * 10) * 0.1;
-            }
+      });
+      if(nearest) {
+        // スムーズな方向転換
+        const targetRotation = Math.atan2(nearest.mesh.position.x - this.mesh.position.x, nearest.mesh.position.z - this.mesh.position.z);
+        this.mesh.rotation.y += (targetRotation - this.mesh.rotation.y) * 0.05;
+        if(minDist < 3.5) {
+          this.isAttacking = true;
+          nearest.respawn(); 
         }
+      }
+    }
+  }
+}
 
-        class Trilobite extends PreyEntity { constructor() { super('Trilobite', 0x556655, 0.4, 0.04); } }
-        class Hurdia extends PreyEntity { constructor() { super('Hurdia', 0xaa5533, 0.8, 0.06); } }
-        class Opabinia extends PreyEntity { constructor() { super('Opabinia', 0x4466aa, 0.5, 0.03); } }
+// Generic Entity Class (Base)
+class PreyEntity {
+  constructor(type, speed) {
+    this.type = type;
+    this.speed = speed;
+    this.mesh = new THREE.Group();
+    this.respawn();
+    scene.add(this.mesh);
+  }
+  respawn() {
+    this.mesh.position.set((Math.random()-0.5)*60, (Math.random()-0.5)*15 - 2, (Math.random()-0.5)*60);
+    this.target = new THREE.Vector3((Math.random()-0.5)*60, (Math.random()-0.5)*10, (Math.random()-0.5)*60);
+  }
+  update(t, delta) {
+    if(this.mesh.position.distanceTo(this.target) < 2) {
+      this.target.set((Math.random()-0.5)*60, (Math.random()-0.5)*10, (Math.random()-0.5)*60);
+    }
+    const dir = this.target.clone().sub(this.mesh.position).normalize();
+    this.mesh.lookAt(this.target);
+    this.mesh.position.add(dir.multiplyScalar(this.speed * timeScale));
+  }
+}
 
-        // --- System Logic & Interaction ---
+// Opabinia: 5つの眼と吻部（ノズル）の実装
+class Opabinia extends PreyEntity { 
+  constructor() { 
+    super('Opabinia', 0.035); 
+    const mat = new THREE.MeshLambertMaterial({ color: 0x4466aa });
+    
+    // Body Segments
+    this.segments = [];
+    for(let i=0; i<7; i++) {
+        const geo = new THREE.CylinderGeometry(0.25 - (i*0.02), 0.25 - (i*0.02), 0.4, 10);
+        geo.rotateX(Math.PI/2);
+        const seg = new THREE.Mesh(geo, mat);
+        seg.position.z = -i * 0.35;
+        this.segments.push(seg);
+        this.mesh.add(seg);
+    }
 
-        function growEvolve() {
-            evolutionLevel += 0.05;
-            anomalocaris.mesh.scale.setScalar(1.0 + (evolutionLevel - 1.0)*0.5);
-            document.getElementById('stats').innerHTML = `EVOLUTION LEVEL: ${evolutionLevel.toFixed(2)}<br>TARGETS: PREDATION SUCCESS`;
-        }
+    // 5 Eyes (アイコン的特徴)
+    const eyeMat = new THREE.MeshLambertMaterial({ color: 0x000000 });
+    const eyePositions = [[0, 0.3, 0.15], [0.15, 0.3, 0], [-0.15, 0.3, 0], [0.2, 0.2, -0.15], [-0.2, 0.2, -0.15]];
+    eyePositions.forEach(pos => {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), eyeMat);
+        eye.position.set(...pos);
+        this.segments[0].add(eye);
+    });
 
-        function triggerTurbidityCurrent() {
-            const overlay = document.getElementById('turbidity-overlay');
-            overlay.style.opacity = 1;
-            setTimeout(() => {
-                // Eternal Return: Reset positions, keep evolution
-                entities.forEach(e => {
-                    if(e.respawn) e.respawn();
-                    else if(e.type === 'Anomalocaris') e.mesh.position.set(0,0,0);
-                });
-                overlay.style.opacity = 0;
-            }, 2000);
-        }
+    // Proboscis (象の鼻のような吻)
+    this.proboscis = [];
+    for(let i=0; i<5; i++) {
+        const node = new THREE.Mesh(new THREE.SphereGeometry(0.08 - (i*0.005), 8, 8), mat);
+        this.proboscis.push(node);
+        this.mesh.add(node);
+    }
+  }
+  update(t, delta) {
+    super.update(t, delta);
+    this.target.y = -9.0; // 底生スカベンジャーの振る舞い
+    
+    // 体幹のうねり（前進運動）
+    this.segments.forEach((seg, i) => {
+        seg.position.y = Math.sin(t * 5.0 - i * 0.6) * 0.08;
+    });
 
-        // Raycasting for Info Panel (Tap/Click)
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
+    // 吻部による海底探査アニメーション
+    this.proboscis.forEach((node, i) => {
+        const offsetZ = 0.2 + (i * 0.15);
+        node.position.set(
+            this.segments[0].position.x + Math.sin(t * 3 + i) * 0.1,
+            this.segments[0].position.y + Math.cos(t * 2 + i) * 0.15 - 0.1,
+            this.segments[0].position.z + offsetZ
+        );
+    });
+  }
+}
 
-        function onPointerDown(event) {
-            // Support touch and mouse
-            const x = event.touches ? event.touches[0].clientX : event.clientX;
-            const y = event.touches ? event.touches[0].clientY : event.clientY;
-            
-            mouse.x = (x / window.innerWidth) * 2 - 1;
-            mouse.y = -(y / window.innerHeight) * 2 + 1;
+// Trilobite: 扁平な節足動物としての再定義
+class Trilobite extends PreyEntity { 
+  constructor() { 
+    super('Trilobite', 0.04); 
+    const mat = new THREE.MeshLambertMaterial({ color: 0x556655 });
+    
+    this.segments = [];
+    for(let i=0; i<5; i++) {
+      const width = i === 0 ? 0.6 : 0.5 - (i*0.05); // 頭部（頭鞍）を広く
+      const geo = new THREE.BoxGeometry(width, 0.15, 0.3);
+      const seg = new THREE.Mesh(geo, mat);
+      seg.position.z = -i * 0.28;
+      this.segments.push(seg);
+      this.mesh.add(seg);
+    }
+  }
+  update(t, delta) {
+    super.update(t, delta);
+    if(anomalocaris && this.mesh.position.distanceTo(anomalocaris.mesh.position) < 20) {
+      const fleeDir = this.mesh.position.clone().sub(anomalocaris.mesh.position).normalize();
+      this.target.copy(this.mesh.position).add(fleeDir.multiplyScalar(10));
+      this.mesh.position.y = -9.8; 
+    }
+    // 底を這うような微小なピッチ変動
+    this.segments.forEach((seg, i) => {
+      seg.rotation.x = Math.sin(t * 8.0 - i * 0.5) * 0.1;
+    });
+  }
+}
 
-            raycaster.setFromCamera(mouse, camera);
-            
-            // Collect all meshes
-            const checkMeshes = [];
-            entities.forEach(e => { if(e.mesh && e.type !== 'algae') checkMeshes.push(e.mesh); });
+// Hurdia: 巨大な頭部甲殻（Carapace）の強調
+class Hurdia extends PreyEntity { 
+  constructor() { 
+    super('Hurdia', 0.06); 
+    const mat = new THREE.MeshLambertMaterial({ color: 0xaa5533 });
+    
+    // Frontal Carapace (フルディア最大の特徴)
+    const headGeo = new THREE.CylinderGeometry(0, 0.5, 1.2, 3);
+    headGeo.rotateX(Math.PI/2);
+    const head = new THREE.Mesh(headGeo, mat);
+    head.position.z = 0.4;
+    this.mesh.add(head);
 
-            const intersects = raycaster.intersectObjects(checkMeshes, true);
-            
-            if (intersects.length > 0) {
-                // Find parent entity
-                let object = intersects[0].object;
-                while(object.parent && object.parent.type === 'Group') {
-                    object = object.parent;
-                }
-                
-                const entity = entities.find(e => e.mesh === object || e.mesh.children.includes(object));
-                if(entity) {
-                    showInfo(entity.type);
-                    // Tap anomaly to force attack manually
-                    if(entity.type === 'Anomalocaris') entity.isAttacking = true;
-                }
-            }
-        }
+    this.body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.8, 4, 8).rotateX(Math.PI/2), mat);
+    this.body.position.z = -0.5;
+    this.mesh.add(this.body);
+  }
+  update(t, delta) {
+    super.update(t, delta);
+    // 巨大な頭部による抵抗を表現した、やや重々しいロール
+    this.mesh.rotation.z = Math.sin(t * 4.0) * 0.15;
+    this.body.position.x = Math.sin(t * 6.0) * 0.1; // 尾部の推進
+  }
+}
 
         function showInfo(type) {
             timeScale = 0.2; // Slow motion
