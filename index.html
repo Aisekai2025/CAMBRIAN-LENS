@@ -248,9 +248,9 @@
       controls.minDistance = 5;
       controls.maxDistance = 60;
 
-      const ambientLight = new THREE.AmbientLight(0x003355, 1.0);
+      const ambientLight = new THREE.AmbientLight(0x003355, 1.2);
       scene.add(ambientLight);
-      const dirLight = new THREE.DirectionalLight(0x4488ff, 1.5);
+      const dirLight = new THREE.DirectionalLight(0x4488ff, 1.8);
       dirLight.position.set(10, 50, 20);
       scene.add(dirLight);
 
@@ -295,7 +295,32 @@
       }
     }
 
-    // --- Creature Classes ---
+    // --- Base Entity ---
+    class PreyEntity {
+      constructor(type, speed) {
+        this.type = type;
+        this.speed = speed;
+        this.mesh = new THREE.Group();
+        this.respawn();
+        scene.add(this.mesh);
+      }
+      respawn() {
+        this.mesh.position.set((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 15 - 2, (Math.random() - 0.5) * 60);
+        this.target = new THREE.Vector3((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 60);
+      }
+      update(t, delta) {
+        if(this.mesh.position.distanceTo(this.target) < 2) {
+          this.target.set((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 60);
+        }
+        const dir = this.target.clone().sub(this.mesh.position).normalize();
+        this.mesh.lookAt(this.target);
+        this.mesh.position.add(dir.multiplyScalar(this.speed * timeScale));
+      }
+    }
+
+    // --- Creature Classes (Scientifically Polished) ---
+    
+    // 1. Anomalocaris (Apex Predator)
     class Anomalocaris {
       constructor() {
         this.type = 'Anomalocaris';
@@ -307,6 +332,7 @@
         const material = new THREE.ShaderMaterial(amberShader);
         this.materialUniforms = material.uniforms;
         
+        // Body Segments
         this.segments = [];
         for(let i = 0; i < 12; i++) {
           const radius = i < 3 ? 1.0 - (i * 0.05) : 0.85 - ((i - 3) * 0.08);
@@ -318,25 +344,68 @@
           this.mesh.add(mesh);
         }
 
-        const eyeGeo = new THREE.SphereGeometry(0.35, 16, 16);
-        const eyeMat = new THREE.MeshLambertMaterial({ color: 0x050505 });
-        const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-        leftEye.position.set(0.9, 0.4, 0.3);
-        const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-        rightEye.position.set(-0.9, 0.4, 0.3);
-        this.segments[0].add(leftEye, rightEye);
+        const detailMat = new THREE.MeshLambertMaterial({ color: 0x050505 });
 
-        this.appendages = [];
-        const appGeo = new THREE.CylinderGeometry(0.12, 0.04, 2.5, 8);
-        appGeo.translate(0, -1.25, 0); 
-        for(let i = -1; i <= 1; i += 2) {
-          const app = new THREE.Mesh(appGeo, material);
-          app.position.set(i * 0.4, -0.2, 1.2);
-          app.rotation.x = Math.PI / 2.2;
-          this.appendages.push(app);
-          this.segments[0].add(app);
+        // Stalked Eyes (眼柄と巨大な複眼)
+        const eyeGrpL = new THREE.Group();
+        const stalkL = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4), material);
+        stalkL.rotation.z = Math.PI / 2;
+        stalkL.position.set(0.6, 0.2, 0);
+        const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), detailMat);
+        eyeL.position.set(0.9, 0.2, 0);
+        eyeGrpL.add(stalkL, eyeL);
+        eyeGrpL.position.z = 0.3;
+        
+        const eyeGrpR = new THREE.Group();
+        const stalkR = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4), material);
+        stalkR.rotation.z = -Math.PI / 2;
+        stalkR.position.set(-0.6, 0.2, 0);
+        const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), detailMat);
+        eyeR.position.set(-0.9, 0.2, 0);
+        eyeGrpR.add(stalkR, eyeR);
+        eyeGrpR.position.z = 0.3;
+        
+        this.segments[0].add(eyeGrpL, eyeGrpR);
+
+        // Oral Cone / Mouth (ペイトイア型口器)
+        const mouthGeo = new THREE.TorusGeometry(0.25, 0.1, 16, 16);
+        const mouth = new THREE.Mesh(mouthGeo, detailMat);
+        mouth.rotation.x = Math.PI / 2;
+        mouth.position.set(0, -0.4, 0.4);
+        this.segments[0].add(mouth);
+
+        // Articulated Frontal Appendages (多関節構造と棘)
+        this.appendagesChains = [];
+        for(let side of [-1, 1]) {
+            let prevNode = this.segments[0];
+            const nodes = [];
+            for(let j = 0; j < 6; j++) {
+                const nodeGrp = new THREE.Group();
+                const part = new THREE.Mesh(new THREE.CylinderGeometry(0.1 - j*0.01, 0.08 - j*0.01, 0.4, 8), material);
+                part.position.y = -0.2; // Pivot offset
+                
+                // Ventral Spines (獲物を捕らえるための棘)
+                const spine = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.25, 4), material);
+                spine.rotation.x = -Math.PI / 4;
+                spine.position.set(0, -0.2, -0.15);
+                part.add(spine);
+
+                nodeGrp.add(part);
+
+                if (j === 0) {
+                    nodeGrp.position.set(side * 0.3, -0.2, 1.0);
+                    nodeGrp.rotation.x = Math.PI / 2;
+                } else {
+                    nodeGrp.position.y = -0.4;
+                }
+                prevNode.add(nodeGrp);
+                prevNode = nodeGrp;
+                nodes.push(nodeGrp);
+            }
+            this.appendagesChains.push(nodes);
         }
 
+        // Flaps
         this.flaps = [];
         const flapGeo = new THREE.PlaneGeometry(3.5, 1.5);
         flapGeo.translate(1.75, 0, 0); 
@@ -350,11 +419,15 @@
           this.flaps.push({ r: flapR, l: flapL, index: i });
         }
         
-        const tailGeo = new THREE.PlaneGeometry(2.5, 3);
-        tailGeo.rotateX(-Math.PI / 2);
-        const tailFan = new THREE.Mesh(tailGeo, material);
-        tailFan.position.set(0, 0, -10.5);
-        this.mesh.add(tailFan);
+        // Tail Fan (3対のブレード状構造)
+        for(let i=0; i<3; i++) {
+            const tailGeo = new THREE.PlaneGeometry(2.5 - i*0.4, 1.5);
+            tailGeo.rotateX(-Math.PI / 2);
+            const tailFan = new THREE.Mesh(tailGeo, material);
+            tailFan.position.set(0, 0.1, -10.0 - i*0.6);
+            tailFan.rotation.y = i * 0.1;
+            this.mesh.add(tailFan);
+        }
 
         scene.add(this.mesh);
         this.mesh.position.set(0, 0, 0);
@@ -388,15 +461,29 @@
 
         if (this.isAttacking) {
           this.attackProgress += delta * 6.0;
-          const angle = Math.sin(this.attackProgress) * Math.PI / 1.5;
-          this.appendages.forEach((app, i) => {
-            app.rotation.x = Math.PI / 2.2 + angle;
-            app.rotation.z = (i === 0 ? 1 : -1) * angle * 0.6;
+          const angle = Math.sin(this.attackProgress) * Math.PI / 2.5;
+          
+          // Articulated appendages curling
+          this.appendagesChains.forEach((nodes, sideIndex) => {
+              nodes.forEach((node, j) => {
+                  if(j === 0) {
+                      node.rotation.x = Math.PI / 2.2 + angle;
+                      node.rotation.z = (sideIndex === 0 ? 1 : -1) * angle * 0.5;
+                  } else {
+                      node.rotation.x = angle * 0.6; // 巻くように曲がる
+                  }
+              });
           });
+
           if(this.attackProgress > Math.PI) {
             this.isAttacking = false;
             this.attackProgress = 0;
-            this.appendages.forEach(app => { app.rotation.set(Math.PI / 2.2, 0, 0); });
+            this.appendagesChains.forEach(nodes => {
+                nodes.forEach((node, j) => {
+                    if(j===0) node.rotation.set(Math.PI / 2.2, 0, 0);
+                    else node.rotation.x = 0;
+                });
+            });
             growEvolve();
           }
         } else {
@@ -420,88 +507,141 @@
       }
     }
 
-    class PreyEntity {
-      constructor(type, speed) {
-        this.type = type;
-        this.speed = speed;
-        this.mesh = new THREE.Group();
-        this.respawn();
-        scene.add(this.mesh);
-      }
-      respawn() {
-        this.mesh.position.set((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 15 - 2, (Math.random() - 0.5) * 60);
-        this.target = new THREE.Vector3((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 60);
-      }
-      update(t, delta) {
-        if(this.mesh.position.distanceTo(this.target) < 2) {
-          this.target.set((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 60);
-        }
-        const dir = this.target.clone().sub(this.mesh.position).normalize();
-        this.mesh.lookAt(this.target);
-        this.mesh.position.add(dir.multiplyScalar(this.speed * timeScale));
-      }
-    }
-
+    // 2. Opabinia (Scavenger)
     class Opabinia extends PreyEntity { 
       constructor() { 
         super('Opabinia', 0.035); 
         const mat = new THREE.MeshLambertMaterial({ color: 0x4466aa });
+        const detailMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
         
         this.segments = [];
-        for(let i = 0; i < 7; i++) {
-            const geo = new THREE.CylinderGeometry(0.25 - (i * 0.02), 0.25 - (i * 0.02), 0.4, 10);
+        this.flaps = [];
+
+        // Body Segments & Lateral Flaps
+        const flapGeo = new THREE.PlaneGeometry(0.8, 0.4);
+        flapGeo.translate(0.4, 0, 0);
+
+        for(let i = 0; i < 15; i++) { // 学説通り約15対の体節
+            const radius = 0.25 - (i * 0.012);
+            const geo = new THREE.CylinderGeometry(radius, radius, 0.25, 10);
             geo.rotateX(Math.PI / 2);
             const seg = new THREE.Mesh(geo, mat);
-            seg.position.z = -i * 0.35;
+            seg.position.z = -i * 0.22;
             this.segments.push(seg);
             this.mesh.add(seg);
+
+            // 遊泳用の葉（Flaps）
+            const fR = new THREE.Mesh(flapGeo, mat);
+            fR.position.set(radius - 0.05, -0.1, 0);
+            const fL = new THREE.Mesh(flapGeo, mat);
+            fL.position.set(-(radius - 0.05), -0.1, 0);
+            fL.rotation.y = Math.PI;
+            seg.add(fR, fL);
+            this.flaps.push({r: fR, l: fL, index: i});
         }
 
-        const eyeMat = new THREE.MeshLambertMaterial({ color: 0x000000 });
-        const eyePositions = [[0, 0.3, 0.15], [0.15, 0.3, 0], [-0.15, 0.3, 0], [0.2, 0.2, -0.15], [-0.2, 0.2, -0.15]];
+        // 5 Eyes (キノコ状の眼柄)
+        const eyePositions = [[0, 0.35, 0.15], [0.15, 0.35, 0], [-0.15, 0.35, 0], [0.2, 0.25, -0.15], [-0.2, 0.25, -0.15]];
         eyePositions.forEach(pos => {
-            const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), eyeMat);
-            eye.position.set(...pos);
-            this.segments[0].add(eye);
+            const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), detailMat);
+            const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.15), mat);
+            stalk.position.set(pos[0], pos[1] - 0.05, pos[2]);
+            eye.position.set(pos[0], pos[1], pos[2]);
+            this.segments[0].add(eye, stalk);
         });
 
+        // Mouth (後ろ向きの口)
+        const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.03, 8, 16), detailMat);
+        mouth.rotation.x = Math.PI / 2;
+        mouth.position.set(0, -0.25, -0.15);
+        this.segments[0].add(mouth);
+
+        // Proboscis (ノズル状の吻)
         this.proboscis = [];
-        for(let i = 0; i < 5; i++) {
+        for(let i = 0; i < 6; i++) {
             const node = new THREE.Mesh(new THREE.SphereGeometry(0.08 - (i * 0.005), 8, 8), mat);
             this.proboscis.push(node);
             this.mesh.add(node);
+        }
+
+        // Tail Blades (尾扇)
+        for(let i=0; i<3; i++) {
+            const tailM = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.8), mat);
+            tailM.rotation.x = -Math.PI / 2;
+            tailM.rotation.y = (i - 1) * 0.3; // 広がるように配置
+            this.segments[14].add(tailM);
         }
       }
       update(t, delta) {
         super.update(t, delta);
         this.target.y = -9.0;
         
+        // メタクロナルウェーブ（Flaps）
+        this.flaps.forEach(f => {
+            const phase = t * 10.0 - f.index * 0.6;
+            f.r.rotation.z = Math.sin(phase) * 0.3;
+            f.l.rotation.z = -Math.sin(phase) * 0.3;
+        });
+
         this.segments.forEach((seg, i) => {
             seg.position.y = Math.sin(t * 5.0 - i * 0.6) * 0.08;
         });
 
+        // 先端に爪がある吻部の動き
         this.proboscis.forEach((node, i) => {
-            const offsetZ = 0.2 + (i * 0.15);
+            const offsetZ = 0.2 + (i * 0.12);
             node.position.set(
-                this.segments[0].position.x + Math.sin(t * 3 + i) * 0.1,
-                this.segments[0].position.y + Math.cos(t * 2 + i) * 0.15 - 0.1,
+                this.segments[0].position.x + Math.sin(t * 4 + i) * 0.1,
+                this.segments[0].position.y + Math.cos(t * 3 + i) * 0.15 - 0.1,
                 this.segments[0].position.z + offsetZ
             );
         });
       }
     }
 
+    // 3. Trilobite (Benthic Arthropod)
     class Trilobite extends PreyEntity { 
       constructor() { 
         super('Trilobite', 0.04); 
         const mat = new THREE.MeshLambertMaterial({ color: 0x556655 });
+        const detailMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
         
         this.segments = [];
-        for(let i = 0; i < 5; i++) {
-          const width = i === 0 ? 0.6 : 0.5 - (i * 0.05);
-          const geo = new THREE.BoxGeometry(width, 0.15, 0.3);
+        
+        // Cephalon (頭部)
+        const headGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.15, 16, 1, false, 0, Math.PI);
+        const head = new THREE.Mesh(headGeo, mat);
+        head.rotation.y = Math.PI / 2;
+        head.position.z = 0.2;
+        this.mesh.add(head);
+
+        // Crescent Eyes (複眼)
+        const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), detailMat);
+        eyeR.scale.set(0.5, 1, 1.5);
+        eyeR.position.set(0.2, 0.1, -0.1);
+        const eyeL = eyeR.clone();
+        eyeL.position.set(-0.2, 0.1, -0.1);
+        head.add(eyeR, eyeL);
+
+        // Antennae (触角)
+        const antGeo = new THREE.CylinderGeometry(0.01, 0.01, 0.5);
+        const antR = new THREE.Mesh(antGeo, detailMat);
+        antR.rotation.x = Math.PI / 2;
+        antR.rotation.z = -Math.PI / 6;
+        antR.position.set(0.15, -0.05, 0.3);
+        const antL = new THREE.Mesh(antGeo, detailMat);
+        antL.rotation.x = Math.PI / 2;
+        antL.rotation.z = Math.PI / 6;
+        antL.position.set(-0.15, -0.05, 0.3);
+        head.add(antR, antL);
+
+        // Thorax & Pygidium (胸部と尾部)
+        for(let i = 0; i < 8; i++) {
+          const w = 0.7 - (i * 0.05);
+          const geo = new THREE.CylinderGeometry(w/2, w/2, 0.1, 16, 1, false, 0, Math.PI);
           const seg = new THREE.Mesh(geo, mat);
-          seg.position.z = -i * 0.28;
+          seg.rotation.y = Math.PI / 2;
+          seg.position.z = -0.05 - (i * 0.12);
           this.segments.push(seg);
           this.mesh.add(seg);
         }
@@ -513,31 +653,90 @@
           this.target.copy(this.mesh.position).add(fleeDir.multiplyScalar(10));
           this.mesh.position.y = -9.8; 
         }
+        // 足の動きの代わりの細かなピッチ揺れ
         this.segments.forEach((seg, i) => {
-          seg.rotation.x = Math.sin(t * 8.0 - i * 0.5) * 0.1;
+          seg.rotation.x = Math.sin(t * 12.0 - i * 0.5) * 0.08;
         });
       }
     }
 
+    // 4. Hurdia (Competitor with massive carapace)
     class Hurdia extends PreyEntity { 
       constructor() { 
         super('Hurdia', 0.06); 
         const mat = new THREE.MeshLambertMaterial({ color: 0xaa5533 });
+        const detailMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
         
-        const headGeo = new THREE.CylinderGeometry(0, 0.5, 1.2, 3);
-        headGeo.rotateX(Math.PI / 2);
-        const head = new THREE.Mesh(headGeo, mat);
-        head.position.z = 0.4;
-        this.mesh.add(head);
+        this.meshGrp = new THREE.Group();
 
-        this.body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.8, 4, 8).rotateX(Math.PI / 2), mat);
-        this.body.position.z = -0.5;
-        this.mesh.add(this.body);
+        // Massive Frontal Carapace (巨大なH要素・P要素甲殻)
+        const carapaceGrp = new THREE.Group();
+        const mainH = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.8, 3), mat);
+        mainH.rotation.x = -Math.PI / 2;
+        mainH.position.z = 0.9;
+        carapaceGrp.add(mainH);
+        this.meshGrp.add(carapaceGrp);
+
+        // Stalked Eyes emerging from carapace notches (甲殻の隙間から出る眼柄)
+        const eyeGrpR = new THREE.Group();
+        const stalkR = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.3), mat);
+        stalkR.rotation.z = -Math.PI / 2;
+        stalkR.position.x = 0.15;
+        const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), detailMat);
+        eyeR.position.x = 0.3;
+        eyeGrpR.add(stalkR, eyeR);
+        eyeGrpR.position.set(0.2, 0, 0.5);
+        
+        const eyeGrpL = eyeGrpR.clone();
+        eyeGrpL.rotation.y = Math.PI;
+        eyeGrpL.position.set(-0.2, 0, 0.5);
+        carapaceGrp.add(eyeGrpR, eyeGrpL);
+
+        // Oral Cone (口器)
+        const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.05, 8, 16), detailMat);
+        mouth.rotation.x = Math.PI / 2;
+        mouth.position.set(0, -0.3, 0.3);
+        carapaceGrp.add(mouth);
+
+        // Body Segments & Flaps (体節とエラ)
+        this.bodySegs = [];
+        this.flaps = [];
+        const flapGeo = new THREE.PlaneGeometry(1.2, 0.5);
+        flapGeo.translate(0.6, 0, 0);
+
+        for(let i=0; i<8; i++) {
+            const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.3 - i*0.02, 0.3 - i*0.02, 0.3, 12), mat);
+            seg.rotation.x = Math.PI / 2;
+            seg.position.z = -0.2 - i*0.25;
+            
+            const fR = new THREE.Mesh(flapGeo, mat);
+            fR.position.set(0.2, -0.1, 0);
+            const fL = new THREE.Mesh(flapGeo, mat);
+            fL.position.set(-0.2, -0.1, 0);
+            fL.rotation.y = Math.PI;
+            seg.add(fR, fL);
+
+            this.flaps.push({r: fR, l: fL, index: i});
+            this.bodySegs.push(seg);
+            this.meshGrp.add(seg);
+        }
+
+        this.mesh.add(this.meshGrp);
       }
       update(t, delta) {
         super.update(t, delta);
-        this.mesh.rotation.z = Math.sin(t * 4.0) * 0.15;
-        this.body.position.x = Math.sin(t * 6.0) * 0.1;
+        // 甲殻の重みを表現したロール
+        this.meshGrp.rotation.z = Math.sin(t * 3.0) * 0.12;
+        
+        this.flaps.forEach(f => {
+            const phase = t * 8.0 - f.index * 0.5;
+            f.r.rotation.z = Math.sin(phase) * 0.3;
+            f.l.rotation.z = -Math.sin(phase) * 0.3;
+        });
+
+        this.bodySegs.forEach((seg, i) => {
+            seg.position.x = Math.sin(t * 5.0 - i * 0.4) * 0.1;
+        });
       }
     }
 
@@ -596,10 +795,10 @@
       const desc = document.getElementById('info-desc');
       
       const database = {
-        'Anomalocaris': '【アノマロカリス】<br>カンブリア紀の頂点捕食者。巨大な前肢と円座状の口器を持つ。',
-        'Trilobite': '【三葉虫】<br>海底を這う節足動物。パニック AI により捕食者から逃避する。',
-        'Hurdia': '【フルディア】<br>巨大な頭部甲殻を持つ。生態系における競合 AI として機能。',
-        'Opabinia': '【オパビニア】<br>5 つの眼と象の鼻のような吻を持つ。スカベンジャーAI。'
+        'Anomalocaris': '【アノマロカリス】<br>カンブリア紀の頂点捕食者。多関節の前肢とペイトイア（円座状の口器）、眼柄を持つ複眼が特徴。',
+        'Trilobite': '【三葉虫】<br>頭部・胸部・尾部が分化した底生節足動物。頭部には三日月型の眼と触角を備える。',
+        'Hurdia': '【フルディア】<br>体長に匹敵する巨大なH要素・P要素甲殻を持つラディオドンタ類。切れ込みから眼柄を突き出す。',
+        'Opabinia': '【オパビニア】<br>5つの眼と先端に爪のある吻を持つ。15対の遊泳葉と3対の尾扇を使いメタクロナルウェーブで泳ぐ。'
       };
 
       title.innerText = type;
